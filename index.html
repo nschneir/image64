@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>image64 — images for the Commodore 64's bitmap modes</title>
+<meta name="description" content="A native macOS app and command-line tool that converts modern images to Commodore 64 bitmap-mode pictures: drag and drop, crop, dither to the 16-color palette, and export Koala / Art Studio files.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4'%3E%3Crect width='4' height='4' fill='%23000'/%3E%3Crect x='1' width='1' height='1' fill='%23fff'/%3E%3Crect x='2' width='1' height='1' fill='%23813338'/%3E%3Crect x='3' width='1' height='1' fill='%2375cec8'/%3E%3Crect y='1' width='1' height='1' fill='%238e3c97'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%2356ac4d'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%232e2c9b'/%3E%3Crect x='3' y='1' width='1' height='1' fill='%23edf171'/%3E%3Crect y='2' width='1' height='1' fill='%238e5029'/%3E%3Crect x='1' y='2' width='1' height='1' fill='%23553800'/%3E%3Crect x='2' y='2' width='1' height='1' fill='%23c46c71'/%3E%3Crect x='3' y='2' width='1' height='1' fill='%234a4a4a'/%3E%3Crect y='3' width='1' height='1' fill='%237b7b7b'/%3E%3Crect x='1' y='3' width='1' height='1' fill='%23a9ff9f'/%3E%3Crect x='2' y='3' width='1' height='1' fill='%23706deb'/%3E%3Crect x='3' y='3' width='1' height='1' fill='%23b2b2b2'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* The 16 C64 colors (Colodore reproduction) ARE the design system.
+       Everything chromatic on this page is one of them; the page chrome
+       itself stays achromatic. */
+    --c0:#000000; --c1:#ffffff; --c2:#813338; --c3:#75cec8;
+    --c4:#8e3c97; --c5:#56ac4d; --c6:#2e2c9b; --c7:#edf171;
+    --c8:#8e5029; --c9:#553800; --c10:#c46c71; --c11:#4a4a4a;
+    --c12:#7b7b7b; --c13:#a9ff9f; --c14:#706deb; --c15:#b2b2b2;
+
+    --bg:#0c0c0e;          /* darkroom, not C64 blue — that's Project64's page */
+    --panel:#131316;
+    --ink:#d6d6d6;
+    --ink-dim:#8b8b8b;
+    --ink-faint:#4a4a4c;
+    --line:#2a2a2e;
+    --mono:ui-monospace,"Cascadia Mono","Menlo","Consolas","Courier New",monospace;
+    --pix:"Silkscreen",var(--mono);
+    --maxw:960px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--mono);font-size:16px;line-height:1.55;letter-spacing:.01em;
+  }
+  /* A faint 2px checkerboard — the page is about dithering, so the paper
+     itself is dithered. Kept near-invisible so text sits on calm ground. */
+  body::before{
+    content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 2px, transparent 2px 4px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.012) 0 2px, transparent 2px 4px);
+  }
+  a{color:var(--c3);text-decoration:none;border-bottom:1px solid var(--ink-faint)}
+  a:hover,a:focus-visible{color:var(--bg);background:var(--c3);border-bottom-color:var(--c3);outline:none}
+  :focus-visible{outline:2px solid var(--c1);outline-offset:2px}
+
+  /* The palette runs as a thin strip across the very top of the page,
+     and again at the bottom — the same way a Koala file is bracketed by
+     its load address and background byte. */
+  .strip{display:grid;grid-template-columns:repeat(16,1fr);height:8px;position:relative;z-index:2}
+  .strip i{display:block}
+  .s0{background:var(--c0)}.s1{background:var(--c1)}.s2{background:var(--c2)}.s3{background:var(--c3)}
+  .s4{background:var(--c4)}.s5{background:var(--c5)}.s6{background:var(--c6)}.s7{background:var(--c7)}
+  .s8{background:var(--c8)}.s9{background:var(--c9)}.s10{background:var(--c10)}.s11{background:var(--c11)}
+  .s12{background:var(--c12)}.s13{background:var(--c13)}.s14{background:var(--c14)}.s15{background:var(--c15)}
+
+  .wrap{position:relative;z-index:1;max-width:var(--maxw);margin:0 auto;padding:0 clamp(16px,4vw,32px)}
+
+  header{padding:clamp(48px,9vw,104px) 0 clamp(20px,4vw,36px)}
+  .kicker{color:var(--ink-dim);font-size:.95rem;letter-spacing:.22em;text-transform:uppercase;margin:0 0 18px}
+  h1{
+    font-family:var(--pix);font-weight:700;line-height:.95;margin:0;
+    font-size:clamp(2.6rem,11vw,6rem);color:var(--c1);letter-spacing:.01em;
+  }
+  h1 .six{color:var(--c14)}h1 .four{color:var(--c3)}
+  .tag{max-width:58ch;font-size:clamp(1rem,2.6vw,1.15rem);margin:1.1em 0 .4em;color:var(--ink)}
+  .status{color:var(--ink-dim);font-size:.95rem;margin:.2em 0 1.4em}
+  .status b{color:var(--c7);font-weight:400}
+  .btns{display:flex;flex-wrap:wrap;gap:12px}
+  .btn{display:inline-block;padding:.6em 1.15em;border:2px solid var(--ink-dim);color:var(--ink);
+       font-family:var(--mono);font-size:1rem;letter-spacing:.06em}
+  .btn:hover,.btn:focus-visible{background:var(--c1);border-color:var(--c1);color:var(--bg)}
+  .btn.primary{border-color:var(--c1);color:var(--c1)}
+
+  section{margin:clamp(56px,9vw,110px) 0}
+  h2{
+    font-family:var(--pix);font-weight:400;color:var(--c1);
+    font-size:clamp(1.15rem,3.2vw,1.5rem);letter-spacing:.04em;margin:0 0 .9em;
+  }
+  h2::before{content:"▸ ";color:var(--c14)}
+  p{margin:.6em 0}
+  .dim{color:var(--ink-dim)}
+  small{font-size:.95rem}
+
+  /* ————— before/after slider ————— */
+  .compare{
+    position:relative;user-select:none;touch-action:none;
+    border:1px solid var(--line);background:#000;overflow:hidden;
+    --pos:50%;
+    aspect-ratio:8/5;
+  }
+  .compare img{
+    position:absolute;inset:0;width:100%;height:100%;display:block;
+    pointer-events:none;
+  }
+  .compare .after{image-rendering:pixelated}
+  .compare .before{clip-path:inset(0 calc(100% - var(--pos)) 0 0)}
+  .compare .bar{
+    position:absolute;top:0;bottom:0;left:var(--pos);width:2px;margin-left:-1px;
+    background:var(--c1);box-shadow:0 0 0 1px rgba(0,0,0,.6);pointer-events:none;
+  }
+  .compare .bar::after{
+    content:"◂ ▸";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    background:var(--c1);color:#000;font-family:var(--mono);font-size:.8rem;
+    padding:.25em .5em;white-space:nowrap;
+  }
+  .compare .lbl{
+    position:absolute;top:10px;font-family:var(--mono);font-size:.8rem;letter-spacing:.14em;
+    background:rgba(0,0,0,.65);color:var(--c1);padding:.25em .6em;pointer-events:none;
+  }
+  .compare .lbl.a{left:10px}
+  .compare .lbl.b{right:10px;color:var(--c13)}
+  .compare input[type=range]{
+    position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:ew-resize;
+  }
+  figcaption{color:var(--ink-dim);font-size:.95rem;margin-top:.7em;line-height:1.5}
+  figure{margin:0}
+
+  /* ————— constraint table ————— */
+  .tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{width:100%;border-collapse:collapse;font-size:1rem;margin:.4em 0}
+  th,td{border:1px solid var(--line);padding:.55em .75em;text-align:left}
+  th{color:var(--c1);font-weight:700;background:var(--panel);letter-spacing:.05em}
+  td:first-child{color:var(--ink-dim)}
+
+  /* ————— palette grid ————— */
+  .pal{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));margin-top:14px}
+  .pal .sw{border:1px solid var(--line);background:var(--panel)}
+  .pal .chip{height:52px}
+  .pal figcaption{padding:.45em .55em .55em;margin:0;font-size:.8rem;line-height:1.45;color:var(--ink-dim)}
+  .pal b{display:block;color:var(--ink);font-weight:400}
+
+  /* ————— pipeline ————— */
+  ol.pipe{list-style:none;counter-reset:st;padding:0;margin:.6em 0;border-left:2px solid var(--line)}
+  ol.pipe li{counter-increment:st;position:relative;padding:.35em 0 .35em 3.4em;margin:.55em 0}
+  ol.pipe li::before{
+    content:counter(st);position:absolute;left:.9em;top:.42em;
+    font-family:var(--pix);font-size:.85rem;color:var(--bg);background:var(--c14);
+    width:1.7em;height:1.7em;display:grid;place-items:center;
+  }
+  ol.pipe b{color:var(--c1);font-weight:400}
+
+  /* ————— file formats ————— */
+  .fmt{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin-top:10px}
+  .fmt .f{border:1px solid var(--line);background:var(--panel);padding:16px 18px}
+  .fmt h3{font-family:var(--pix);font-weight:400;font-size:1rem;color:var(--c1);margin:0 0 .5em}
+  .fmt h3 small{color:var(--ink-dim);font-family:var(--mono)}
+  .bytes{display:flex;height:22px;border:1px solid var(--line);margin:.6em 0 .4em}
+  .bytes i{display:block;height:100%}
+  .bytes .seg-load{background:var(--c11)}
+  .bytes .seg-bmp{background:var(--c14)}
+  .bytes .seg-scr{background:var(--c3)}
+  .bytes .seg-col{background:var(--c13)}
+  .bytes .seg-bg{background:var(--c7)}
+  .bytes .seg-pad{background:var(--c11)}
+  .legend{font-size:.85rem;color:var(--ink-dim);line-height:1.7}
+  .legend i{display:inline-block;width:.75em;height:.75em;vertical-align:-.05em;margin-right:.35em}
+
+  .code{border:1px solid var(--line);background:var(--panel);margin:12px 0}
+  .code pre{margin:0;padding:14px 16px;overflow-x:auto;font-size:1rem;line-height:1.65;color:var(--ink)}
+  .code .cm{color:var(--ink-dim)}
+
+  ul.plain{list-style:none;padding:0;margin:.4em 0}
+  ul.plain li{padding-left:1.5em;position:relative;margin:.3em 0}
+  ul.plain li::before{content:"▸";position:absolute;left:0;color:var(--c14)}
+
+  footer{border-top:1px solid var(--line);margin-top:clamp(56px,9vw,110px);padding:26px 0 34px;color:var(--ink-dim);font-size:.95rem}
+  footer .links{display:flex;flex-wrap:wrap;gap:8px 22px;margin:.8em 0}
+
+  /* Reveal-on-scroll hiding only applies once the script has run (html.js),
+     so content is never lost to a script failure. */
+  html.js .reveal{opacity:0;transform:translateY(12px)}
+  html.js .reveal.in{opacity:1;transform:none;transition:opacity .5s ease,transform .5s ease}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    .reveal{opacity:1;transform:none}
+    html{scroll-behavior:auto}
+  }
+</style>
+</head>
+<body>
+
+<div class="strip" aria-hidden="true"><i class="s0"></i><i class="s1"></i><i class="s2"></i><i class="s3"></i><i class="s4"></i><i class="s5"></i><i class="s6"></i><i class="s7"></i><i class="s8"></i><i class="s9"></i><i class="s10"></i><i class="s11"></i><i class="s12"></i><i class="s13"></i><i class="s14"></i><i class="s15"></i></div>
+
+<div class="wrap">
+
+  <header>
+    <p class="kicker">macOS · Commodore 64 · bitmap mode</p>
+    <h1>image<span class="six">6</span><span class="four">4</span></h1>
+    <p class="tag">A native macOS app and command-line tool — one shared engine —
+    that converts modern images into pictures a Commodore 64 can display: crop,
+    dither to the 16-color palette, satisfy the per-cell color limits, and export
+    files that load on real hardware.</p>
+    <p class="status">status: <b>in design</b> — the spec is done, the code is not. No releases yet.</p>
+    <div class="btns">
+      <a class="btn primary" href="https://github.com/nschneir/image64">VIEW ON GITHUB ▸</a>
+      <a class="btn" href="#constraints">THE CONSTRAINTS</a>
+      <a class="btn" href="https://github.com/nschneir/Project64">PROJECT 64 ▸</a>
+    </div>
+  </header>
+
+  <section id="demo" class="reveal">
+    <h2>WHAT THE CONVERSION DOES</h2>
+    <figure>
+      <div class="compare" id="cmp">
+        <img class="after" src="img/after.png" width="640" height="400"
+             alt="The same sunset scene converted to C64 multicolor mode: dithered purple and brown sky, dark blue mountains, a light-green sun core">
+        <img class="before" src="img/before.png" width="640" height="400"
+             alt="A smooth synthetic sunset: violet-to-orange gradient sky, a sun on the horizon, dark mountain silhouettes reflected in water">
+        <span class="lbl a">SOURCE</span>
+        <span class="lbl b">C64 MULTICOLOR</span>
+        <span class="bar" aria-hidden="true"></span>
+        <input type="range" min="0" max="100" value="50" step="0.5"
+               aria-label="Reveal more of the source image (left) or the converted C64 image (right)">
+      </div>
+      <figcaption>Drag the divider. A synthetic test scene (left) and the same scene
+      through the multicolor pipeline (right): resized to 160×200,
+      Floyd&#8209;Steinberg&#8209;dithered to the Colodore palette, then reduced to one shared
+      background plus three colors per 4×8 cell. This pair was generated by a
+      prototype of the app's conversion pipeline; the app itself is not built yet.</figcaption>
+    </figure>
+  </section>
+
+  <section id="constraints" class="reveal">
+    <h2>THE CONSTRAINTS</h2>
+    <p>The C64's VIC-II chip has a fixed 16-color palette and two bitmap modes.
+    Neither can put arbitrary colors at arbitrary pixels — color choices are made
+    per character cell, and that restriction is what gives C64 images their look.
+    image64 targets both modes:</p>
+    <div class="tscroll">
+    <table>
+      <thead><tr><th></th><th>Hires</th><th>Multicolor</th></tr></thead>
+      <tbody>
+        <tr><td>resolution</td><td>320 × 200</td><td>160 × 200, pixels displayed double-wide</td></tr>
+        <tr><td>cell size</td><td>8 × 8 px</td><td>4 × 8 px</td></tr>
+        <tr><td>colors per cell</td><td>any 2 of 16</td><td>1 shared background + any 3 of 16</td></tr>
+        <tr><td>memory</td><td>8000 B bitmap + 1000 B screen RAM</td><td>+ 1000 B color RAM + 1 background byte</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="dim"><small>Both modes display at 8:5, so the crop tool is locked to
+    that aspect regardless of mode.</small></p>
+  </section>
+
+  <section id="palette" class="reveal">
+    <h2>SIXTEEN COLORS</h2>
+    <p>Every color the VIC-II can produce. Exported files store 4-bit indices;
+    RGB values only matter for color matching and preview, where image64 uses the
+    Colodore reproduction (shown here) or the darker Pepto measurement, selectable.</p>
+    <div class="pal">
+      <figure class="sw"><div class="chip" style="background:var(--c0)"></div><figcaption><b>0 black</b>#000000</figcaption></figure>
+      <figure class="sw"><div class="chip" style="background:var(--c1)"></div><figcaption><b>1 white</b>#ffffff</figcaption></figure>
+      <figure class="sw"><div class="chip" style="background:var(--c2)"></div><figcaption><b>2 red</b>#813338</figcaption></figure>
+      <figure class="sw"><div class="chip" style="background:var(--c3)"></div><figcaption><b>3 cyan</b>#75cec8</figcaption></figure>
+      <figure class="sw"><div class="chip" style="background:var(--c4)"></div><figcaption><b>4 purple</b>#8e3c97</figcaption></figure>
+      <figure class="sw"><div class="chip" style="background:var(--c5)"></div><figcaption><b>5 green</b>#56ac4d</figcaption></figure>
+      <figure class="sw"><div class="chip" style="background:var(--c6)"></div><figcaption><b>6 blue</b>#2e2c9b</figcaption></figure>
+      <figure class="sw"><div class="chip" style="background:var(--c7)"></div><figcaption><b>7 yellow</b>#edf171</figcaption></figure>
+      <figure class="sw"><div class="chip" style="background:var(--c8)"></div><figcaption><b>8 orange</b>#8e5029</figcaption></figure>
+      <figure class="sw"><div class="chip" style="background:var(--c9)"></div><figcaption><b>9 brown</b>#553800</figcaption></figure>
+      <figure class="sw"><div class="chip" style="background:var(--c10)"></div><figcaption><b>10 light red</b>#c46c71</figcaption></figure>
+      <figure class="sw"><div class="chip" style="background:var(--c11)"></div><figcaption><b>11 dark grey</b>#4a4a4a</figcaption></figure>
+      <figure class="sw"><div class="chip" style="background:var(--c12)"></div><figcaption><b>12 grey</b>#7b7b7b</figcaption></figure>
+      <figure class="sw"><div class="chip" style="background:var(--c13)"></div><figcaption><b>13 light green</b>#a9ff9f</figcaption></figure>
+      <figure class="sw"><div class="chip" style="background:var(--c14)"></div><figcaption><b>14 light blue</b>#706deb</figcaption></figure>
+      <figure class="sw"><div class="chip" style="background:var(--c15)"></div><figcaption><b>15 light grey</b>#b2b2b2</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="how" class="reveal">
+    <h2>HOW IT WORKS</h2>
+    <p>In the app: drop an image, adjust the 8:5 crop on the source, and watch the
+    converted result beside it — every change re-runs the pipeline:</p>
+    <ol class="pipe">
+      <li><b>Resize</b> the cropped image to 320×200 or 160×200 (Lanczos).</li>
+      <li><b>Adjust</b> brightness, contrast, saturation.</li>
+      <li><b>Dither</b> to the 16-color palette — Floyd–Steinberg, ordered (Bayer 4×4), or none.</li>
+      <li><b>Enforce cell limits</b> — keep each cell's most frequent colors, remap the rest to the nearest kept color; in multicolor, first pick the one background shared by every cell.</li>
+      <li><b>Pack</b> the result into C64 bitmap, screen-RAM, and color-RAM bytes.</li>
+    </ol>
+    <p>The preview is rendered from the packed bytes — not from an intermediate —
+    so the picture on screen is the picture that exports.</p>
+    <p>The same five steps run from the command line — the CLI and the app call
+    the identical engine code, so a scripted conversion and an app export with
+    the same parameters produce byte-identical files:</p>
+    <div class="code"><pre>image64 convert photo.jpg -o picture.koa   <span class="cm"># multicolor, inferred from .koa</span>
+image64 convert photo.jpg -o picture.art   <span class="cm"># hires, inferred from .art</span>
+image64 convert photo.jpg -o out.koa --dither bayer --palette colodore --json</pre></div>
+  </section>
+
+  <section id="formats" class="reveal">
+    <h2>WHAT IT EXPORTS</h2>
+    <div class="fmt">
+      <div class="f">
+        <h3>KOALA <small>.koa — multicolor</small></h3>
+        <div class="bytes" aria-hidden="true">
+          <i class="seg-load" style="width:2%" title="load address"></i>
+          <i class="seg-bmp" style="width:66%" title="bitmap"></i>
+          <i class="seg-scr" style="width:15%" title="screen RAM"></i>
+          <i class="seg-col" style="width:15%" title="color RAM"></i>
+          <i class="seg-bg" style="width:2%" title="background"></i>
+        </div>
+        <p class="legend">
+          <i class="seg-load"></i>load address $6000 (2 B)<br>
+          <i class="seg-bmp"></i>bitmap (8000 B)<br>
+          <i class="seg-scr"></i>screen RAM (1000 B)<br>
+          <i class="seg-col"></i>color RAM (1000 B)<br>
+          <i class="seg-bg"></i>background (1 B) — 10003 bytes total
+        </p>
+      </div>
+      <div class="f">
+        <h3>ART STUDIO <small>.art — hires</small></h3>
+        <div class="bytes" aria-hidden="true">
+          <i class="seg-load" style="width:2%" title="load address"></i>
+          <i class="seg-bmp" style="width:80%" title="bitmap"></i>
+          <i class="seg-scr" style="width:16%" title="screen RAM"></i>
+          <i class="seg-pad" style="width:2%" title="padding"></i>
+        </div>
+        <p class="legend">
+          <i class="seg-load"></i>load address $2000 (2 B)<br>
+          <i class="seg-bmp"></i>bitmap (8000 B)<br>
+          <i class="seg-scr"></i>screen RAM (1000 B)<br>
+          <i class="seg-pad"></i>padding (7 B) — 9009 bytes total
+        </p>
+      </div>
+    </div>
+    <p>Plus a PNG of the converted image (640×400) for use anywhere else.
+    Exports are the standard layouts used by existing C64 software — they load in
+    <a href="https://vice-emu.sourceforge.io/">VICE</a>, on real hardware, and in the
+    usual viewers. With the neighboring
+    <a href="https://github.com/nschneir/Project64">Project 64</a> toolset:</p>
+    <div class="code"><pre>c64 session start
+c64 run picture.koa    <span class="cm"># display it on the emulated machine</span></pre></div>
+  </section>
+
+  <section id="status" class="reveal">
+    <h2>STATUS</h2>
+    <ul class="plain">
+      <li>Design complete: modes, pipeline, file formats, and UI are specified.</li>
+      <li>Implementation not started. There is nothing to download yet.</li>
+      <li>Planned stack: Swift / SwiftUI, macOS 14+. The conversion engine
+          (<code>C64Kit</code>) is a UI-free Swift package with its own test
+          suite; the app and the <code>image64</code> CLI are thin front ends
+          over it.</li>
+    </ul>
+  </section>
+
+  <footer class="reveal">
+    <p>MIT licensed. Developed primarily by AI — Anthropic's Claude, via Claude
+    Code — under human direction; a human sets the goals and reviews the work.</p>
+    <div class="links">
+      <a href="https://github.com/nschneir/image64">▸ GitHub</a>
+      <a href="https://github.com/nschneir/image64/blob/main/LICENSE.md">▸ License</a>
+      <a href="https://github.com/nschneir/image64/blob/main/SECURITY.md">▸ Security</a>
+      <a href="https://github.com/nschneir/Project64">▸ Project 64</a>
+    </div>
+  </footer>
+
+</div>
+
+<div class="strip" aria-hidden="true"><i class="s0"></i><i class="s1"></i><i class="s2"></i><i class="s3"></i><i class="s4"></i><i class="s5"></i><i class="s6"></i><i class="s7"></i><i class="s8"></i><i class="s9"></i><i class="s10"></i><i class="s11"></i><i class="s12"></i><i class="s13"></i><i class="s14"></i><i class="s15"></i></div>
+
+<script>
+(function(){
+  // Before/after divider. The range input is the real control (keyboard,
+  // touch, and mouse all included); CSS reads its value via --pos.
+  var cmp = document.getElementById("cmp");
+  var range = cmp.querySelector("input[type=range]");
+  function set(v){ cmp.style.setProperty("--pos", v + "%"); }
+  range.addEventListener("input", function(){ set(range.value); });
+  set(range.value);
+
+  // Reveal-on-scroll, skipped for reduced motion.
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var els = document.querySelectorAll(".reveal");
+  if(reduce || !("IntersectionObserver" in window)){
+    els.forEach(function(e){ e.classList.add("in"); });
+  } else {
+    document.documentElement.classList.add("js");
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){ en.target.classList.add("in"); io.unobserve(en.target); }
+      });
+    }, {threshold:.12});
+    els.forEach(function(e){ io.observe(e); });
+  }
+})();
+</script>
+</body>
+</html>
