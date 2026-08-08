@@ -21,7 +21,7 @@ Where things are documented (don't duplicate them here):
 
 One engine, two thin front ends, with strict boundaries:
 
-1. **`C64Kit/`** — a local Swift package holding the entire conversion
+1. **`Sources/C64Kit/`** — the library target holding the entire conversion
    engine: palette tables (Colodore/Pepto), quantization + dithering, per-cell
    color-constraint enforcement, C64 byte packing, file writers, and
    `ConversionOperation` (load → crop → convert → write, the shared front-end
@@ -48,10 +48,11 @@ exactly what exports. Preserve that invariant in any change to the pipeline.
 ## Commands
 
 ```sh
-swift build --package-path C64Kit      # build the engine
-swift test --package-path C64Kit       # engine unit tests — the bulk of the suite
-xcodebuild -project image64.xcodeproj -scheme image64 build   # full app build
-xcodebuild -project image64.xcodeproj -scheme image64 test    # app-target tests
+swift build                 # build everything (engine, CLI, app)
+swift test                  # full test suite
+swift test --filter C64KitTests   # engine tests only
+swift run image64 --help    # the CLI
+swift run Image64App        # launch the app
 ```
 
 Keep shell invocations in the plain form above: one command, executable
