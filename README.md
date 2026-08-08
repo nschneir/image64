@@ -41,25 +41,36 @@ toolset; exported images drop straight into that workflow.
       image64 convert photo.jpg -o out.koa --dither bayer --palette colodore
 
   Every command takes `--json` for machine-readable output — the intended
-  interface for AI agents, as in [Project64](../Project64).
+  interface for AI agents, as in [Project64](../Project64). Outputs
+  overwrite without prompting, so a shell loop batch-converts a directory:
+
+      for f in art/*.png; do
+          image64 convert "$f" -o "out/$(basename "${f%.*}").koa"
+      done
+
+  AI agents get a doc-tested skill covering the full CLI surface and the
+  VICE verification loop: `skills/c64-image-conversion/SKILL.md`.
 
 ## Status
 
-**In design.** The conversion engine and app are not yet implemented; the
-design is complete and implementation is underway. Watch this space.
+**In development.** The design and implementation plan are complete; the
+code is being built task-by-task, tests first. No releases yet.
 
 ## Building
 
-Requires Xcode 16+ on macOS 14+.
+Requires Xcode 16+ (or its command-line tools) on macOS 14+.
 
     git clone https://github.com/nschneir/image64.git
     cd image64
-    open image64.xcodeproj
+    swift build                # engine + CLI + app
+    swift test                 # full test suite
+    swift run Image64App       # launch the app
+    scripts/make-app.sh        # package dist/image64.app (unsigned, local use)
 
-The conversion engine lives in `C64Kit`, a UI-free local Swift package that
-builds and tests from the command line:
-
-    swift test --package-path C64Kit
+One SwiftPM package, three targets — open `Package.swift` in Xcode if you
+prefer an IDE. The conversion engine is `C64Kit`, a UI-free library target
+with its own test suite; the app and the `image64` CLI are thin front ends
+over it.
 
 ## Trying the output
 

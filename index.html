@@ -290,6 +290,11 @@
     <div class="code"><pre>image64 convert photo.jpg -o picture.koa   <span class="cm"># multicolor, inferred from .koa</span>
 image64 convert photo.jpg -o picture.art   <span class="cm"># hires, inferred from .art</span>
 image64 convert photo.jpg -o out.koa --dither bayer --palette colodore --json</pre></div>
+    <p>Outputs overwrite without prompting, so a shell <code>for</code> loop
+    batch-converts a directory. For AI agents the repository ships a skill
+    (<code>skills/c64-image-conversion</code>) documenting the CLI surface and the
+    emulator verification loop — and a test keeps that document in sync with
+    <code>--help</code>, so it cannot drift.</p>
   </section>
 
   <section id="formats" class="reveal">
@@ -340,12 +345,15 @@ c64 run picture.koa    <span class="cm"># display it on the emulated machine</sp
   <section id="status" class="reveal">
     <h2>STATUS</h2>
     <ul class="plain">
-      <li>Design complete: modes, pipeline, file formats, and UI are specified.</li>
-      <li>Implementation not started. There is nothing to download yet.</li>
-      <li>Planned stack: Swift / SwiftUI, macOS 14+. The conversion engine
-          (<code>C64Kit</code>) is a UI-free Swift package with its own test
-          suite; the app and the <code>image64</code> CLI are thin front ends
-          over it.</li>
+      <li>Design and implementation plan complete: modes, pipeline, file
+          formats, UI, CLI, and an agent skill are specified.</li>
+      <li>Implementation in progress, built task-by-task with tests first.
+          There is nothing to download yet.</li>
+      <li>Stack: Swift / SwiftUI, macOS 14+, one SwiftPM package. The
+          conversion engine (<code>C64Kit</code>) is a UI-free library with its
+          own test suite; the app and the <code>image64</code> CLI are thin
+          front ends over it. The app packages as an unsigned
+          <code>image64.app</code> built by a script.</li>
     </ul>
   </section>
 
