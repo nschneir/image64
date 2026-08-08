@@ -23,6 +23,9 @@ VICE, or via the Project64 toolchain.
 - A CLI (`image64` command) exposing the same conversion and export
   operations, executing the same engine code as the app — the front ends must
   not be able to drift apart.
+- An agent skill (`skills/c64-image-conversion/SKILL.md`, following
+  Project64's skill conventions) so AI agents can use the CLI effectively;
+  its factual claims are tested against the implemented CLI.
 
 ### Non-Goals
 
@@ -170,6 +173,28 @@ dependency), for scripts and AI agents. It parses arguments into the same
   convention.
 - Exit 1 with an actionable message on unreadable input or unwritable output.
 
+### Agent skill (`skills/c64-image-conversion/SKILL.md`)
+
+A skill in Project64's format (YAML frontmatter with `name` and a
+"Use when…" `description`, then a practical body) teaching an AI agent to
+convert images with the `image64` CLI:
+
+- How to find or build the binary (`swift build -c release` →
+  `.build/release/image64`).
+- The `convert` command surface with every option, defaults, and the exact
+  `--json` output shape.
+- Guidance an agent can act on: multicolor for photographs, hires for line
+  art and text; crop before converting rather than letting the centered
+  default guess; what the background-color index in the JSON means.
+- The verification loop: display the exported file on an emulated C64 via
+  the neighboring Project64 toolset (`c64 session start`, `c64 run out.koa`,
+  `c64 screen`).
+
+Like Project64, the skill's documentation is tested: a test asserts that the
+options documented in SKILL.md and the options reported by
+`image64 convert --help` match bidirectionally, so the skill cannot drift
+from the CLI.
+
 ## Conversion Pipeline
 
 Given the cropped `CGImage` and settings:
@@ -247,8 +272,9 @@ byte buffers (≈64 K pixels — comfortably fast without SIMD heroics).
 1. `C64Kit`: palette, quantization, cell enforcement, packing, file writers,
    `ConversionOperation` — with the full unit-test suite.
 2. CLI: the `image64 convert` command over `ConversionOperation`, with its
-   end-to-end tests. (Also the acceptance vehicle: exports verifiable in VICE
-   before any UI exists.)
+   end-to-end tests, plus the `c64-image-conversion` agent skill and its
+   doc-accuracy test. (Also the acceptance vehicle: exports verifiable in
+   VICE before any UI exists.)
 3. App shell: window, drag-and-drop, before/after panes, async conversion.
 4. Crop overlay interaction.
 5. Controls + live re-conversion + export.
