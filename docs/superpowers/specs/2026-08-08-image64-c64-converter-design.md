@@ -108,6 +108,17 @@ A single-window app:
      double-wide), i.e. always 640×400.
    Both use a standard save panel with a filename derived from the source.
 
+5. **Show on C64.** **File ▸ Show in VICE** (⌘R): writes a self-displaying
+   `.prg` to a temporary location and opens it with `x64sc`. A `.koa`/`.art`
+   is bare data, so C64Kit builds a runnable program: a BASIC `SYS` stub plus
+   a small machine-language routine that sets the VIC-II registers for the
+   image's mode, copies bitmap/screen/color data into place, sets background
+   and border, and loops. The command is disabled (with an explanatory
+   tooltip) when `x64sc` is not found on `PATH` or in the Homebrew
+   locations. The same program is exportable as **File ▸ Export Runnable
+   PRG…** and via the CLI's `--prg` option — it runs on real hardware and
+   under Project64's `c64 run` too.
+
 Every control carries an accessibility label; the app is fully operable
 with VoiceOver except the crop rectangle (whose result is always reachable
 by leaving the default crop and using the CLI's `--crop` instead).
@@ -147,6 +158,9 @@ A local Swift package, fully unit-testable:
   exported data, never from an intermediate, so what you see is exactly what
   the C64 will show.
 - **`C64FileWriter`** — serializes a `C64Image` to Koala or Art Studio bytes.
+- **`C64PrgWriter`** — serializes a `C64Image` to a self-displaying `.prg`
+  (BASIC stub + mode-appropriate ML display routine + image data), used by
+  Show in VICE, Export Runnable PRG, and the CLI's `--prg`.
 - **`ConversionOperation`** — the shared front-end entry point: load an image
   file, apply a crop rect (or the largest centered 8:5 default), run
   `C64Converter`, and write the requested output files. **Both front ends
@@ -193,6 +207,9 @@ dependency), for scripts and AI agents. It parses arguments into the same
 - `--json` prints a machine-readable result (output paths, mode, background
   color index, palette) — the intended agent interface, following Project64's
   convention.
+- `--prg out.prg` additionally writes the self-displaying program
+  (`C64PrgWriter`), runnable with `x64sc out.prg` or Project64's
+  `c64 run out.prg`.
 - Existing output files are overwritten without prompting (standard Unix
   behavior; scripts depend on it).
 - Exit 1 with an actionable message on unreadable input or unwritable output.
