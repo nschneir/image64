@@ -4,30 +4,42 @@ Instructions for AI coding agents working on this repository's code.
 
 ## What this is
 
-image64: a native macOS app (Swift/SwiftUI, macOS 14+) that converts modern
+image64: a native macOS tool (Swift/SwiftUI, macOS 14+) that converts modern
 images to Commodore 64 bitmap-mode pictures — hires (320×200, 2 colors per
 8×8 cell) and multicolor (160×200, shared background + 3 colors per 4×8
 cell) — with drag-and-drop input, interactive 8:5 cropping, live before/after
-preview, and export to Koala (`.koa`), Art Studio (`.art`), and PNG.
+preview, and export to Koala (`.koa`), Art Studio (`.art`), and PNG. Two
+front ends — the windowed app and the `image64` CLI — drive the same engine.
 
 Where things are documented (don't duplicate them here):
 
-- `README.md` — what the app does, building, trying exports in VICE.
-- `docs/superpowers/` — design specs and plans. **Local-only and gitignored**
-  (maintainer's checkout); never commit or push anything under it.
+- `README.md` — what the tool does, building, CLI usage, trying exports in
+  VICE.
+- `docs/superpowers/` — design specs and plans (committed in this repo).
 
 ## Layout and architecture
 
-Two layers with a strict boundary:
+One engine, two thin front ends, with strict boundaries:
 
 1. **`C64Kit/`** — a local Swift package holding the entire conversion
-   engine: palette tables (Pepto/Colodore), quantization + dithering, per-cell
-   color-constraint enforcement, C64 byte packing, and file writers. It
-   imports no UI frameworks (CoreGraphics/CoreImage are fine; SwiftUI/AppKit
-   are not) and is fully unit-testable from the command line.
+   engine: palette tables (Colodore/Pepto), quantization + dithering, per-cell
+   color-constraint enforcement, C64 byte packing, file writers, and
+   `ConversionOperation` (load → crop → convert → write, the shared front-end
+   entry point). It imports no UI frameworks (CoreGraphics/CoreImage are
+   fine; SwiftUI/AppKit are not) and is fully unit-testable from the command
+   line.
 2. **The app target** — SwiftUI shell: window, drag-and-drop, crop overlay,
    controls, async conversion orchestration, save panels. Keep it thin;
    anything testable without a window belongs in `C64Kit`.
+3. **The CLI target** — `image64` executable: argument parsing over
+   `ConversionOperation`, every command supporting `--json` (the intended AI
+   interface, per Project64's convention).
+
+**App/CLI lockstep is the cardinal rule.** Both front ends execute a command
+by calling `ConversionOperation` — never by reimplementing any part of it.
+New operations go in `C64Kit` and are surfaced by both front ends; a CLI run
+and an app export with the same parameters must produce byte-identical files
+(there is a test asserting this — keep it passing).
 
 The preview is rendered *from the packed C64 bytes* (`C64Image.render`),
 never from an intermediate representation — what the user sees must be
@@ -54,7 +66,9 @@ commit; nothing downstream will catch what you skip.
 ## Code quality
 
 - Swift 5.10+, SwiftUI-first; no third-party dependencies without maintainer
-  approval — ImageIO, Core Image, and Core Graphics cover this app's needs.
+  approval — ImageIO, Core Image, and Core Graphics cover the engine's needs.
+  The one permitted dependency is swift-argument-parser, in the CLI target
+  only.
 - `C64Kit` stays UI-free (the boundary above is the cardinal rule). New
   conversion behavior goes in `C64Kit` with tests; the app layer only
   orchestrates.
@@ -84,4 +98,3 @@ commit; nothing downstream will catch what you skip.
 - Commit messages follow `type(scope): summary` style (`feat(engine): …`,
   `fix(crop): …`, `docs(readme): …`).
 - Commit locally; do not push unless the maintainer asks.
-- `docs/superpowers/` is local-only — never commit or push anything under it.

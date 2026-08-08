@@ -17,9 +17,6 @@ crush.json
 .superpowers/
 scratch/
 
-# Design specs/plans live in the maintainer's checkout only
-docs/superpowers/
-
 # Converted-image outputs — test fixtures under a Fixtures/ directory are
 # the committed exception; anything exported while poking at the app is not.
 *.koa

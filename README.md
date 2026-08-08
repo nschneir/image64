@@ -5,10 +5,11 @@
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue.svg)
 ![Built with AI](https://img.shields.io/badge/built%20with-AI-green.svg)
 
-image64 is a native macOS app that converts modern images into pictures that
-satisfy the Commodore 64's bitmap-mode display constraints — drag an image in,
-crop it, watch the live C64 preview, and export files loadable on real
-hardware or in the VICE emulator.
+image64 is a native macOS tool that converts modern images into pictures that
+satisfy the Commodore 64's bitmap-mode display constraints. It is both a
+windowed app — drag an image in, crop it, watch the live C64 preview — and an
+`image64` command-line tool for scripted use; the two front ends execute the
+same engine code, and exports load on real hardware or in the VICE emulator.
 
 It is a companion to [Project64](../Project64), the agentic C64 development
 toolset; exported images drop straight into that workflow.
@@ -28,11 +29,19 @@ toolset; exported images drop straight into that workflow.
 
 - **Tune** the result with live-updating controls: dithering (Floyd–Steinberg,
   ordered Bayer, or none), brightness / contrast / saturation, and palette
-  (Pepto or Colodore).
+  (Colodore or Pepto).
 - **Export** native C64 files — Koala (`.koa`) for multicolor, Art Studio
   (`.art`) for hires — plus a modern PNG of the converted image. The preview
   is rendered from the exact bytes that get exported, so what you see is what
   the C64 shows.
+- **Script it** with the CLI, which runs the identical conversion code:
+
+      image64 convert photo.jpg -o picture.koa            # multicolor, from .koa
+      image64 convert photo.jpg -o picture.art            # hires, from .art
+      image64 convert photo.jpg -o out.koa --dither bayer --palette colodore
+
+  Every command takes `--json` for machine-readable output — the intended
+  interface for AI agents, as in [Project64](../Project64).
 
 ## Status
 
@@ -43,7 +52,7 @@ design is complete and implementation is underway. Watch this space.
 
 Requires Xcode 16+ on macOS 14+.
 
-    git clone https://github.com/<owner>/image64.git
+    git clone https://github.com/nschneir/image64.git
     cd image64
     open image64.xcodeproj
 
