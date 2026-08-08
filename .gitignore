@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+
+# Xcode / Swift
+.build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+.swiftpm/
+dist/
+
+# Agent tooling (local-only)
+.claude/
+.crush/
+.crush.json
+crush.json
+.superpowers/
+scratch/
+
+# Design specs/plans live in the maintainer's checkout only
+docs/superpowers/
+
+# Converted-image outputs — test fixtures under a Fixtures/ directory are
+# the committed exception; anything exported while poking at the app is not.
+*.koa
+*.art
+!**/Fixtures/**/*.koa
+!**/Fixtures/**/*.art
