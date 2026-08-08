@@ -32,7 +32,11 @@ VICE, or via the Project64 toolchain.
 - No sprite, character-set (PETSCII), FLI/IFLI, or interlace modes.
 - No per-cell manual color editing or paint tools — this is a converter, not a
   pixel editor.
-- No batch conversion in v1.
+- No batch conversion **in the app**. Converting many files is the CLI's job
+  — a shell loop over `image64 convert` — and the agent skill documents the
+  pattern. The app stays a one-image-at-a-time tool.
+- No Undo for crop or slider changes in v1 — Reset plus cheap re-adjustment
+  covers it; revisit if users ask.
 - No Windows/Linux port; macOS 14+ only.
 
 ## Background: C64 Bitmap Mode Constraints
@@ -83,8 +87,12 @@ A single-window app:
 ### Flow
 
 1. **Drop / open.** The empty state is a full-window drop target ("Drop an
-   image here"). Also supports File ▸ Open and paste. Dropping a new image
-   replaces the current one (no confirmation — nothing destructive is lost).
+   image here") that highlights on drag-over. Equal citizens: **File ▸
+   Open…** (⌘O), **File ▸ Open Recent**, paste (⌘V), dropping a file onto
+   the app's Dock icon, and Finder "Open With" (the app bundle registers
+   `public.image` document types). Dropping or opening a new image replaces
+   the current one (no confirmation — nothing destructive is lost). The
+   window title shows the source filename.
 2. **Crop.** The before pane shows the source with an overlaid crop rectangle,
    aspect-locked to 8:5. Corner/edge handles resize it; dragging inside moves
    it. Initial crop is the largest centered 8:5 rect. Double-click resets it.
@@ -92,12 +100,17 @@ A single-window app:
    re-conversion off the main thread, debounced at ~100 ms. The after pane
    updates when it completes; conversion of a full frame must stay well under
    one second on Apple Silicon.
-4. **Export.** Toolbar menu with:
+4. **Export.** Menu-bar commands **File ▸ Export C64 File…** (⌘E) and
+   **File ▸ Export PNG…** (⇧⌘E), duplicated by a toolbar menu:
    - **C64 file** — Koala (.koa) when in multicolor mode, Art Studio (.art)
      when in hires mode.
    - **PNG** — the converted image upscaled ×2 (multicolor pixels rendered
      double-wide), i.e. always 640×400.
    Both use a standard save panel with a filename derived from the source.
+
+Every control carries an accessibility label; the app is fully operable
+with VoiceOver except the crop rectangle (whose result is always reachable
+by leaving the default crop and using the CLI's `--crop` instead).
 
 ### Controls (v1 scope)
 
@@ -151,6 +164,15 @@ A local Swift package, fully unit-testable:
   `PreviewView` (nearest-neighbor-interpolated result), `ControlsView`,
   `ExportMenu`.
 
+**App bundle.** `swift run Image64App` is the developer loop, but a bare
+SwiftPM executable is not a Mac app: no menu-bar name, no Dock icon, no
+document types. `scripts/make-app.sh` wraps the release binary in a minimal
+`image64.app` (Info.plist with `CFBundleName`, `CFBundleIdentifier`,
+`CFBundleDocumentTypes` for `public.image` as a viewer, `LSMinimumSystemVersion`
+14.0) so Finder launch, Dock drops, and "Open With" behave like a Mac app.
+File-open events are handled via an `NSApplicationDelegateAdaptor`
+implementing `application(_:open:)`.
+
 ### CLI layer (`image64` executable)
 
 A second thin front end (swift-argument-parser is the one permitted
@@ -171,7 +193,15 @@ dependency), for scripts and AI agents. It parses arguments into the same
 - `--json` prints a machine-readable result (output paths, mode, background
   color index, palette) — the intended agent interface, following Project64's
   convention.
+- Existing output files are overwritten without prompting (standard Unix
+  behavior; scripts depend on it).
 - Exit 1 with an actionable message on unreadable input or unwritable output.
+- Batch conversion is a shell loop — documented in the README and the agent
+  skill:
+
+      for f in art/*.png; do
+          image64 convert "$f" -o "out/$(basename "${f%.*}").koa"
+      done
 
 ### Agent skill (`skills/c64-image-conversion/SKILL.md`)
 
@@ -277,6 +307,8 @@ byte buffers (≈64 K pixels — comfortably fast without SIMD heroics).
    VICE before any UI exists.)
 3. App shell: window, drag-and-drop, before/after panes, async conversion.
 4. Crop overlay interaction.
-5. Controls + live re-conversion + export.
-6. Golden-image polish pass: tune dithering defaults against real photos,
+5. Controls + live re-conversion + export, File menu with Open/Export
+   commands and shortcuts, accessibility labels.
+6. App bundle packaging (`scripts/make-app.sh`, document types, Dock drops).
+7. Golden-image polish pass: tune dithering defaults against real photos,
    verify in VICE.
