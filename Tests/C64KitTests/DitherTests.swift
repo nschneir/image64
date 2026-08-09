@@ -217,34 +217,103 @@ final class DitherTests: XCTestCase {
     // MARK: - Serpentine, observably
 
     func testFloydSteinbergScanIsSerpentine() {
-        // A raster (always left→right) scan would diffuse the same way on every
-        // row, so a vertically constant input would produce identical rows. A
-        // serpentine scan reverses on odd rows, so at least one odd row must
-        // differ from the even row above it.
-        let image = greyRamp()  // constant down every column
+        // Row 0 is pure black, which is an exact palette colour, so it emits
+        // zero error and contributes nothing downward. Everything below is
+        // therefore decided by row 1's own scan direction alone — which is
+        // exactly the serpentine property, isolated.
+        //
+        // For flat greys the colodore nearest-index map is:
+        //   0…34 → 0,  35…46 → 9,  47…98 → 11,  99…150 → 12,
+        //   151…216 → 15,  217…255 → 1.
+        //
+        // Serpentine — row 1 (odd) runs right→left:
+        //   (2,1): 30 → index 0 (black), error 30 − 0 = +30.
+        //          forward is now leftward: (1,1) += 30·7/16 = +13.125
+        //   (1,1): 40 + 13.125 = 53.125 → byte 53 → index 11 (74),
+        //          error 53 − 74 = −21 → (0,1) += −21·7/16 = −9.1875
+        //   (0,1): 40 − 9.1875 = 30.8125 → byte 31 → index 0.
+        //   Row 1 = [0, 11, 0].
+        //
+        // A raster scan would run row 1 left→right instead and get [9, 0, 11]:
+        //   (0,1): 40 → index 9 (brown, #553800) — note 40 is in the 35…46 band,
+        //          so the error (−45, −16, +40) is not even grey any more, and
+        //          the two orders diverge immediately and completely.
+        //
+        // The two orders share no pixel in row 1, so this fixture cannot pass
+        // under a raster implementation.
+        let image = RGBBuffer(
+            width: 3, height: 2,
+            pixels: [
+                RGB(r: 0, g: 0, b: 0), RGB(r: 0, g: 0, b: 0), RGB(r: 0, g: 0, b: 0),
+                RGB(r: 40, g: 40, b: 40), RGB(r: 40, g: 40, b: 40), RGB(r: 30, g: 30, b: 30),
+            ])
         let result = Quantizer.quantize(image, palette: .colodore, dither: .fs)
-        let row0 = Array(result.indices[0..<16])
-        let row1 = Array(result.indices[16..<32])
-        XCTAssertNotEqual(row0, row1, "rows are identical; the scan is not serpentine")
+        XCTAssertEqual(result.indices, [0, 0, 0, 0, 11, 0], "raster order would give [0,0,0,9,0,11]")
     }
 
-    // MARK: - Error diffusion is clamped before matching
+    // MARK: - Out-of-range accumulator conventions
+
+    /// A 3×3 of saturated primaries. Quantizing it drives the Floyd–Steinberg
+    /// accumulator to −50.44 at the low end and +305.44 at the high end, so it
+    /// exercises both clamping directions, and it is small enough to pin
+    /// exactly.
+    private func outOfRangeFixture() -> RGBBuffer {
+        RGBBuffer(
+            width: 3, height: 3,
+            pixels: [
+                RGB(r: 255, g: 0, b: 0), RGB(r: 0, g: 0, b: 255), RGB(r: 0, g: 255, b: 255),
+                RGB(r: 0, g: 0, b: 0), RGB(r: 255, g: 0, b: 255), RGB(r: 0, g: 0, b: 0),
+                RGB(r: 255, g: 255, b: 255), RGB(r: 0, g: 255, b: 255), RGB(r: 255, g: 255, b: 255),
+            ])
+    }
 
     func testFloydSteinbergClampsBeforeMatching() {
-        // A hard black/white edge repeated across a row drives the accumulator
-        // far past both ends of 0…255. Clamping first keeps every index legal
-        // and, on this input, keeps the extremes on the extreme palette entries.
-        var pixels: [RGB] = []
-        for y in 0..<8 {
-            for x in 0..<8 {
-                let on = (x + y) % 2 == 0
-                pixels.append(on ? RGB(r: 255, g: 255, b: 255) : RGB(r: 0, g: 0, b: 0))
-            }
-        }
-        let image = RGBBuffer(width: 8, height: 8, pixels: pixels)
+        // Pins the clamp-before-match convention. On this fixture the pixel at
+        // (0,1) accumulates to roughly (−50, 25, 66): clamping first turns that
+        // into (0, 25, 66), whose nearest entry is 11 (#4A4A4A)… but matching
+        // the *unclamped* triple instead lets the −50 red inflate the distance
+        // to every mid-grey and black wins, giving index 0.
+        //
+        // So index 3 of the output is 11 under clamped matching and 0 under
+        // unclamped matching — one array distinguishes the two implementations.
+        // (The previous version of this test asserted `index < 16`, which is a
+        // tautology: nearestIndex cannot return anything else.)
+        let result = Quantizer.quantize(outOfRangeFixture(), palette: .colodore, dither: .fs)
+        XCTAssertEqual(
+            result.indices, [2, 6, 3, 9, 4, 0, 1, 3, 1],
+            "matching an unclamped accumulator would give [2, 6, 3, 0, 4, 0, 1, 3, 1]")
+    }
+
+    func testFloydSteinbergMeasuresErrorAgainstTheClampedValue() {
+        // Pins the other half of the clamping convention: once a value has been
+        // clamped, the error is measured against the clamped byte, not the raw
+        // accumulator. Measuring against the raw value would re-inject the
+        // overshoot that clamping just discarded, and the residual would grow
+        // without bound down a high-contrast image.
+        //
+        // This fixture drives the accumulator to −47.69 … +279.50. Under the
+        // clamped basis the pixel at (1,2) resolves to 2 (#813338); under the
+        // raw basis the extra re-injected error carries it to 8 (#8E5029).
+        let image = RGBBuffer(
+            width: 3, height: 3,
+            pixels: [
+                RGB(r: 255, g: 255, b: 0), RGB(r: 0, g: 255, b: 255), RGB(r: 0, g: 0, b: 0),
+                RGB(r: 255, g: 0, b: 255), RGB(r: 0, g: 255, b: 0), RGB(r: 0, g: 0, b: 0),
+                RGB(r: 0, g: 255, b: 255), RGB(r: 255, g: 0, b: 0), RGB(r: 0, g: 0, b: 255),
+            ])
         let result = Quantizer.quantize(image, palette: .colodore, dither: .fs)
-        for index in result.indices {
-            XCTAssertLessThan(index, 16)
-        }
+        XCTAssertEqual(
+            result.indices, [7, 3, 0, 4, 5, 0, 3, 2, 6],
+            "measuring error against the raw accumulator would give [7, 3, 0, 4, 5, 0, 3, 8, 6]")
+    }
+
+    func testFloydSteinbergKeepsEveryIndexInPaletteRange() {
+        // Cheap sanity net over a fixture that genuinely leaves 0…255 in both
+        // directions. Weak on its own — the two tests above are what pin the
+        // behaviour — but it would catch an implementation that indexed the
+        // palette with an unclamped value and trapped.
+        let result = Quantizer.quantize(outOfRangeFixture(), palette: .colodore, dither: .fs)
+        XCTAssertEqual(result.indices.count, 9)
+        XCTAssertTrue(result.indices.allSatisfy { $0 < 16 })
     }
 }
