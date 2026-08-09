@@ -276,34 +276,58 @@ final class ConversionOperationTests: XCTestCase {
         }
     }
 
-    func testPackedPictureReproducesTheConstrainedBufferExactly() throws {
-        // Packing degrades gracefully when a cell holds more colours than the
-        // hardware can show, which means a missing `enforce` call would not
-        // crash — it would quietly lose colours. This is the test that would
-        // catch it: what comes back out of the packed bytes must equal what
-        // went in.
+    func testPackedMulticolorPictureReproducesTheConstrainedBufferExactly() throws {
+        try assertPackedPictureReproducesTheConstrainedBuffer(mode: .multicolor)
+    }
+
+    func testPackedHiresPictureReproducesTheConstrainedBufferExactly() throws {
+        // Needed in its own right rather than covered by the multicolour twin:
+        // `pack(hires:)` degrades just as gracefully as `pack(multicolor:)`, so
+        // a dropped `enforceHires` is invisible to every other test in this
+        // file — the per-cell invariant still holds, it is just measuring the
+        // packer's damage control instead of the constraint pass.
+        try assertPackedPictureReproducesTheConstrainedBuffer(mode: .hires)
+    }
+
+    /// Runs the pipeline's stages by hand and asserts the finished picture
+    /// decodes back to exactly the buffer the constraint pass produced.
+    ///
+    /// Packing degrades gracefully when a cell holds more colours than the
+    /// hardware can show, which means a missing `enforce` call would not crash —
+    /// it would quietly lose colours, and every invariant test would still pass
+    /// because the packer cleaned up after it. This is the test that catches
+    /// that: what comes back out of the packed bytes must equal what went in.
+    private func assertPackedPictureReproducesTheConstrainedBuffer(
+        mode: BitmapMode, file: StaticString = #filePath, line: UInt = #line
+    ) throws {
         let source = makeSource()
-        let settings = ConversionSettings()
+        var settings = ConversionSettings()
+        settings.mode = mode
+        let width = mode == .hires ? 320 : 160
+
         let loaded = try ImageLoading.loadCGImage(from: source)
         let crop = CropGeometry.defaultCrop(
             sourceWidth: loaded.width, sourceHeight: loaded.height)
         let prepared = ImageLoading.prepare(
-            loaded, cropRect: crop, targetWidth: 160, targetHeight: 200,
+            loaded, cropRect: crop, targetWidth: width, targetHeight: 200,
             brightness: settings.brightness, contrast: settings.contrast,
             saturation: settings.saturation)
         var expected = Quantizer.quantize(
             prepared, palette: settings.palette, dither: settings.dither)
-        CellConstraints.enforceMulticolor(&expected, palette: settings.palette)
+        switch mode {
+        case .hires: CellConstraints.enforceHires(&expected, palette: settings.palette)
+        case .multicolor: CellConstraints.enforceMulticolor(&expected, palette: settings.palette)
+        }
 
-        let result = try ConversionOperation.run(request(source, mode: .multicolor))
+        let result = try ConversionOperation.run(request(source, mode: mode))
         let actual = try indices(of: result.image, palette: settings.palette)
 
         // Compared pixel by pixel rather than with one `XCTAssertEqual` on the
         // buffers: a whole-buffer comparison prints 32 000 indices twice, which
         // buries the answer to the only question worth asking — where, and how
         // many.
-        XCTAssertEqual(actual.width, expected.width)
-        XCTAssertEqual(actual.height, expected.height)
+        XCTAssertEqual(actual.width, expected.width, file: file, line: line)
+        XCTAssertEqual(actual.height, expected.height, file: file, line: line)
         var mismatches = 0
         var firstMismatch: String?
         for y in 0..<expected.height {
@@ -317,7 +341,8 @@ final class ConversionOperationTests: XCTestCase {
         }
         XCTAssertEqual(
             mismatches, 0,
-            "packing changed \(mismatches) pixels; first at \(firstMismatch ?? "-")")
+            "\(mode): packing changed \(mismatches) pixels; first at \(firstMismatch ?? "-")",
+            file: file, line: line)
     }
 
     // MARK: - The shared path
@@ -379,6 +404,63 @@ final class ConversionOperationTests: XCTestCase {
 
         let whole = try ConversionOperation.run(self.request(source, mode: .multicolor))
         XCTAssertNotEqual(result.image, whole.image, "the crop must change the picture")
+    }
+
+    func testCropUsedReportsTheClippedRectangleNotTheRequestedOne() throws {
+        // `prepare` clips a crop to the image, so a rectangle hanging off the
+        // right edge samples fewer columns than it names. `cropUsed` is what
+        // the front ends echo back — the CLI prints it, the app draws it — so
+        // it has to be the rectangle that was *sampled*, not the one that was
+        // asked for, or both front ends lie about the same conversion.
+        let source = makeSource(name: "wide.png", width: 900, height: 600)
+        var request = self.request(source, mode: .multicolor)
+        request.cropRect = CGRect(x: 800, y: 0, width: 400, height: 250)
+
+        let result = try ConversionOperation.run(request)
+        XCTAssertEqual(result.cropUsed, CGRect(x: 800, y: 0, width: 100, height: 250))
+    }
+
+    func testCropUsedReportsTheWholeImageWhenTheCropMissesEntirely() throws {
+        // `prepare`'s documented fallback: a rectangle that intersects nothing
+        // converts the whole image rather than failing, because a degenerate
+        // rectangle mid-drag must not take the app down. `cropUsed` must say so.
+        let source = makeSource(name: "wide.png", width: 900, height: 600)
+        var request = self.request(source, mode: .multicolor)
+        request.cropRect = CGRect(x: 2000, y: 2000, width: 100, height: 100)
+
+        let result = try ConversionOperation.run(request)
+        XCTAssertEqual(result.cropUsed, CGRect(x: 0, y: 0, width: 900, height: 600))
+
+        // And the picture really is the whole image, not merely reported as it.
+        var wholeRequest = self.request(source, mode: .multicolor)
+        wholeRequest.cropRect = CGRect(x: 0, y: 0, width: 900, height: 600)
+        XCTAssertEqual(result.image, try ConversionOperation.run(wholeRequest).image)
+    }
+
+    func testCropUsedAlwaysNamesTheRectangleThatWasSampled() throws {
+        // The general form of the two tests above: converting with `cropUsed`
+        // must give the same picture as the conversion that produced it, for
+        // any rectangle at all. If the clipping rule here and the one inside
+        // `prepare` ever diverge, this fails whatever shape the divergence has.
+        let source = makeSource(name: "wide.png", width: 900, height: 600)
+        let rectangles = [
+            CGRect(x: 0, y: 19, width: 900, height: 562),
+            CGRect(x: 800, y: 0, width: 400, height: 250),
+            CGRect(x: -100, y: -50, width: 400, height: 250),
+            CGRect(x: 2000, y: 2000, width: 100, height: 100),
+            CGRect(x: 0, y: 0, width: 0, height: 0),
+        ]
+
+        for rectangle in rectangles {
+            var request = self.request(source, mode: .multicolor)
+            request.cropRect = rectangle
+            let result = try ConversionOperation.run(request)
+
+            var replay = self.request(source, mode: .multicolor)
+            replay.cropRect = result.cropUsed
+            XCTAssertEqual(
+                try ConversionOperation.run(replay).image, result.image, "\(rectangle)")
+        }
     }
 
     // MARK: - Failure at the edges

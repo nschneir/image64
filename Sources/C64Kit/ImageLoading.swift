@@ -122,15 +122,15 @@ public enum ImageLoading {
             targetWidth > 0 && targetHeight > 0,
             "prepare needs a positive target size, got \(targetWidth)×\(targetHeight)")
 
-        let imageRect = CGRect(x: 0, y: 0, width: image.width, height: image.height)
-        let clipped = cropRect.intersection(imageRect)
-        let crop = (clipped.isNull || clipped.isEmpty) ? imageRect : clipped
+        let imageHeight = CGFloat(image.height)
+        let crop = effectiveCrop(
+            cropRect, imageWidth: image.width, imageHeight: image.height)
 
         // Core Image's origin is bottom-left; ours is top-left. The flip is the
         // whole difference between cropping the sky and cropping the ground.
         let flipped = CGRect(
             x: crop.origin.x,
-            y: imageRect.height - crop.origin.y - crop.height,
+            y: imageHeight - crop.origin.y - crop.height,
             width: crop.width, height: crop.height)
 
         let source =
@@ -174,6 +174,27 @@ public enum ImageLoading {
             ])
 
         return renderRGB(adjusted, width: targetWidth, height: targetHeight)
+    }
+
+    /// The region `prepare` will actually sample for a given `cropRect` — the
+    /// rectangle clipped to the image, or the whole image if it misses.
+    ///
+    /// `prepare` cannot report this itself (it returns pixels), and a caller
+    /// that needs to *name* the region it converted — `ConversionOperation`,
+    /// which hands `cropUsed` back to both front ends — would otherwise have to
+    /// restate the rule. Two statements of one rule is one statement too many:
+    /// the day the fallback changed, `cropUsed` would start describing a crop
+    /// that never happened. So the rule lives here, `prepare` calls it, and
+    /// anyone who needs to describe the result calls the same function.
+    public static func effectiveCrop(
+        _ cropRect: CGRect, imageWidth: Int, imageHeight: Int
+    ) -> CGRect {
+        let imageRect = CGRect(x: 0, y: 0, width: imageWidth, height: imageHeight)
+        let clipped = cropRect.intersection(imageRect)
+        // A rectangle that misses the image entirely — or is degenerate, which
+        // is what a crop overlay reports mid-drag — converts the whole image
+        // rather than nothing at all.
+        return (clipped.isNull || clipped.isEmpty) ? imageRect : clipped
     }
 
     /// Renders the `width`×`height` region of `image` at the Core Image origin

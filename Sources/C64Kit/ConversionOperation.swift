@@ -47,9 +47,13 @@ public struct ConversionResult: Sendable {
     /// The converted picture, in the exact bytes a C64 would hold.
     public let image: C64Image
 
-    /// The crop that was actually used — the request's, or the default that
-    /// was computed for it. Front ends echo this back to the user (the CLI
-    /// prints it, the app draws it), so a defaulted crop is never a mystery.
+    /// The crop that was actually sampled — the request's rectangle clipped to
+    /// the image, the whole image if that rectangle missed, or the default if
+    /// none was given. Front ends echo this back to the user (the CLI prints
+    /// it, the app draws it), so it is deliberately the region that was
+    /// converted rather than the one that was asked for: a defaulted or tidied
+    /// crop is never a mystery, and re-running with this rectangle reproduces
+    /// this picture.
     public let cropUsed: CGRect
 
     /// The files written, in the order they were written: the C64 file first,
@@ -148,9 +152,16 @@ public enum ConversionOperation {
         let c64Output = try c64Output(for: request)
 
         let source = try ImageLoading.loadCGImage(from: request.inputURL)
-        let crop =
+        let requestedCrop =
             request.cropRect
             ?? CropGeometry.defaultCrop(sourceWidth: source.width, sourceHeight: source.height)
+        // What `prepare` will *sample*, which is not always what was asked for:
+        // a rectangle hanging off an edge is clipped and one that misses the
+        // image is replaced by the whole of it. `cropUsed` is echoed back to
+        // the user by both front ends, so it has to be the region that was
+        // actually converted or it describes a conversion that never happened.
+        let crop = ImageLoading.effectiveCrop(
+            requestedCrop, imageWidth: source.width, imageHeight: source.height)
 
         let image = convert(source, cropRect: crop, settings: request.settings)
 
