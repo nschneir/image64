@@ -26,6 +26,16 @@ let package = Package(
         // ArgumentParser is deliberately absent here: the dependency is
         // permitted in the CLI target only.
         .executableTarget(name: "Image64App", dependencies: ["C64Kit"]),
-        .testTarget(name: "C64KitTests", dependencies: ["C64Kit"]),
+        // Fixture builders both test targets read. A plain target rather than a
+        // second copy of the file in each suite: the CLI tests must convert the
+        // *same* images the engine tests measure, or a lockstep failure could
+        // hide behind differently-drawn inputs.
+        .target(name: "TestSupport", dependencies: ["C64Kit"], path: "Tests/TestSupport"),
+        .testTarget(name: "C64KitTests", dependencies: ["C64Kit", "TestSupport"]),
+        // Depends on the executable so `swift test` is guaranteed to have built
+        // the binary these tests spawn, and on `C64Kit` for the lockstep test
+        // that calls `ConversionOperation.run` directly and compares bytes.
+        .testTarget(
+            name: "CLITests", dependencies: ["C64Kit", "TestSupport", "Image64CLI"]),
     ]
 )

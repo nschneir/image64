@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import TestSupport
 import XCTest
 
 @testable import C64Kit

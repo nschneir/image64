@@ -9,13 +9,15 @@ import UniformTypeIdentifiers
 /// Shared rather than duplicated per test file so a fixture's pixels mean the
 /// same thing everywhere: the CLI tests convert the *same* gradient the engine
 /// tests measure, so a disagreement between the two front ends cannot hide
-/// behind differently-drawn inputs.
+/// behind differently-drawn inputs. That is also why this lives in its own
+/// `TestSupport` target rather than in `C64KitTests`: `CLITests` needs the same
+/// fixtures, and a second copy of this file would let the two suites drift.
 ///
 /// Deliberately does **not** go through `ImageLoading.writePNG`, even though
 /// that would be less code: a fixture built by the system under test cannot
 /// witness that system's bugs. The eight lines of `CGImageDestination` here are
 /// the price of an independent input.
-enum TestImageFactory {
+public enum TestImageFactory {
 
     /// Draws a `width`×`height` image whose columns ramp linearly from `from`
     /// (column 0) to `to` (the last column) and writes it to `url` as a PNG.
@@ -30,7 +32,7 @@ enum TestImageFactory {
     /// ImageIO failures below — all of which mean "the parameters are
     /// impossible" — trap rather than propagate; that keeps the signature
     /// callable from non-throwing setup code.
-    static func makePNG(
+    public static func makePNG(
         width: Int, height: Int, horizontalGradient from: RGB, to: RGB, at url: URL
     ) {
         precondition(width > 0 && height > 0, "fixture size must be positive")
@@ -77,7 +79,7 @@ enum TestImageFactory {
     /// different colour, so the prepared buffer only holds the right values if
     /// the profile was honoured. Photographs off a modern phone are P3, so this
     /// is the common case, not an exotic one.
-    static func makeDisplayP3PNG(
+    public static func makeDisplayP3PNG(
         width: Int, height: Int, solid components: (r: Double, g: Double, b: Double), at url: URL
     ) {
         precondition(width > 0 && height > 0, "fixture size must be positive")
@@ -116,7 +118,7 @@ enum TestImageFactory {
     /// Exposed so a test can state the expected pixel without restating the
     /// interpolation — and so that if the ramp ever changes, the expectations
     /// change with it instead of silently disagreeing.
-    static func gradientColor(from: RGB, to: RGB, width: Int, x: Int) -> RGB {
+    public static func gradientColor(from: RGB, to: RGB, width: Int, x: Int) -> RGB {
         let t = width == 1 ? 0 : Double(x) / Double(width - 1)
         func ramp(_ a: UInt8, _ b: UInt8) -> UInt8 {
             UInt8((Double(a) + (Double(b) - Double(a)) * t).rounded())
