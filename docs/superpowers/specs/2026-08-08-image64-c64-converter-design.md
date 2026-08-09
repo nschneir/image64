@@ -313,6 +313,12 @@ byte buffers (≈64 K pixels — comfortably fast without SIMD heroics).
   `c64` CLI as a manual acceptance check.
 - App-layer logic (debounce, crop math) tested where practical; no UI
   snapshot testing in v1.
+- **Coverage gate:** ≥95% line coverage over the engine (`C64Kit`) and CLI
+  targets combined, measured by `scripts/coverage.sh`. The SwiftUI app
+  target is excluded — view bodies don't execute under XCTest, and all
+  testable app logic lives in `C64Kit` by design.
+- **Final review:** a whole-branch code review before merge, with a single
+  fix pass for its findings.
 
 ## Milestones
 
