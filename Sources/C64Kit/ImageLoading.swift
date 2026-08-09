@@ -46,9 +46,17 @@ public enum ImageLoading {
     /// Shared because building a `CIContext` allocates GPU resources and the app
     /// re-prepares on every slider tick. `CIContext` is documented as thread-safe.
     ///
-    /// Pinning both the working and the output space to sRGB keeps the slider
-    /// maths — and therefore the exported file — identical whatever display the
-    /// app happens to be on.
+    /// `workingColorSpace` is where `CIColorControls` does its arithmetic, and
+    /// it is not cosmetic: left unset, Core Image picks a wider space and a
+    /// saturation boost on colodore cyan drives the red channel below zero,
+    /// where it clamps to 0 instead of the 46 sRGB gives — a 46-unit difference
+    /// in an exported picture. Pinned by
+    /// `testAdjustmentsAreComputedInTheSRGBWorkingSpace`.
+    ///
+    /// `outputColorSpace` is belt-and-braces: `renderRGB` passes sRGB to
+    /// `render(toBitmap:)` explicitly, which is what actually governs the bytes
+    /// that come back. Both are set so the context is right whichever way it is
+    /// later asked to render.
     private static let context = CIContext(options: [
         .workingColorSpace: sRGB,
         .outputColorSpace: sRGB,
@@ -125,12 +133,28 @@ public enum ImageLoading {
             y: imageRect.height - crop.origin.y - crop.height,
             width: crop.width, height: crop.height)
 
-        let source = CIImage(cgImage: image)
+        let source =
+            CIImage(cgImage: image)
             .cropped(to: flipped)
             // Move the crop's corner to the origin so the scale below is about
             // size alone and the result lands in the render bounds.
             .transformed(
                 by: CGAffineTransform(translationX: -flipped.origin.x, y: -flipped.origin.y))
+            // Clamped *before* the resampler, and this is load-bearing. Lanczos
+            // has a wide kernel, so pixels near the border sample beyond the
+            // extent; on a finite image that is transparent black, and since
+            // Core Image works premultiplied and this function drops alpha, the
+            // result is a darkened frame all the way round every non-1:1 resize
+            // (measured at up to 24 units on a solid field — an order of
+            // magnitude past the ±2 the tests allow, and plainly visible as a
+            // border in the exported picture). Clamping replaces that void with
+            // the edge pixels repeated, which changes no interior pixel.
+            //
+            // The clamp goes after the crop, not before it, so the pixels
+            // outside the user's crop rectangle stay out of the picture: what
+            // the border resamples against is the crop's own edge, not whatever
+            // the crop was drawn to exclude.
+            .clampedToExtent()
 
         let verticalScale = Double(targetHeight) / Double(crop.height)
         let horizontalScale = Double(targetWidth) / Double(crop.width)
@@ -141,19 +165,13 @@ public enum ImageLoading {
                 kCIInputAspectRatioKey: horizontalScale / verticalScale,
             ])
 
-        let adjusted =
-            scaled
-            // The scaled extent can land a hair short of the target through
-            // floating-point rounding; clamping repeats the edge pixels so the
-            // last row or column is never a transparent seam.
-            .clampedToExtent()
-            .applyingFilter(
-                "CIColorControls",
-                parameters: [
-                    kCIInputBrightnessKey: 0.25 * brightness,
-                    kCIInputContrastKey: 1 + 0.5 * contrast,
-                    kCIInputSaturationKey: 1 + saturation,
-                ])
+        let adjusted = scaled.applyingFilter(
+            "CIColorControls",
+            parameters: [
+                kCIInputBrightnessKey: 0.25 * brightness,
+                kCIInputContrastKey: 1 + 0.5 * contrast,
+                kCIInputSaturationKey: 1 + saturation,
+            ])
 
         return renderRGB(adjusted, width: targetWidth, height: targetHeight)
     }

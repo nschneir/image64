@@ -158,16 +158,65 @@ final class ImageLoadingTests: XCTestCase {
             targetWidth: 160, targetHeight: 200,
             brightness: 0, contrast: 0, saturation: 0)
 
-        // The ramp must still run left to right after a 4× horizontal and 2×
-        // vertical squeeze — a transposed aspect correction would flatten it.
-        for y in stride(from: 0, to: 200, by: 50) {
-            XCTAssertLessThan(
-                Int(buffer[8, y].g), Int(buffer[80, y].g), "row \(y): left is darker than centre")
-            XCTAssertLessThan(
-                Int(buffer[80, y].g), Int(buffer[151, y].g), "row \(y): centre is darker than right")
+        // Ordering alone does not pin the scale/aspectRatio assignment: swapping
+        // the two (scale = horizontal, aspectRatio = vertical/horizontal) still
+        // produces a left-to-right ramp, just the wrong one. So assert the
+        // *values*. Output column x covers source columns 4x…4x+3, whose mean is
+        // source column 4x + 1.5; the nearest authored columns are 34, 322 and
+        // 606, which the factory paints 49, 121 and 192.
+        for (x, sourceColumn) in [(8, 34), (80, 322), (151, 606)] {
+            let expected = TestImageFactory.gradientColor(
+                from: darkGrey, to: lightGrey, width: 640, x: sourceColumn)
+            for y in stride(from: 0, to: 200, by: 50) {
+                assertClose(
+                    buffer[x, y], expected,
+                    "column \(x) must resample source column ~\(sourceColumn), row \(y)")
+            }
         }
         // A vertical ramp would show up here; the source has none.
         assertClose(buffer[80, 0], buffer[80, 199], tolerance: 4, "column 80 top vs bottom")
+    }
+
+    func testDownscalingDoesNotDarkenTheBorder() throws {
+        // Resampling a finite-extent image samples transparent black outside it;
+        // with premultiplied RGBA and alpha dropped that shows up as darkened
+        // edge pixels — invisible in a 1:1 test and glaring on an exported
+        // picture, which is a solid frame of wrong colour all the way round.
+        let file = url("cyan.png")
+        TestImageFactory.makePNG(
+            width: 640, height: 400, horizontalGradient: cyan, to: cyan, at: file)
+        let image = try ImageLoading.loadCGImage(from: file)
+
+        let buffer = ImageLoading.prepare(
+            image, cropRect: CGRect(x: 0, y: 0, width: 640, height: 400),
+            targetWidth: 160, targetHeight: 200,
+            brightness: 0, contrast: 0, saturation: 0)
+
+        for x in 0..<160 {
+            assertClose(buffer[x, 0], cyan, "top edge at column \(x)")
+            assertClose(buffer[x, 199], cyan, "bottom edge at column \(x)")
+        }
+        for y in 0..<200 {
+            assertClose(buffer[0, y], cyan, "left edge at row \(y)")
+            assertClose(buffer[159, y], cyan, "right edge at row \(y)")
+        }
+    }
+
+    func testUpscalingDoesNotDarkenTheBorder() throws {
+        let file = url("cyan.png")
+        TestImageFactory.makePNG(
+            width: 80, height: 50, horizontalGradient: cyan, to: cyan, at: file)
+        let image = try ImageLoading.loadCGImage(from: file)
+
+        let buffer = ImageLoading.prepare(
+            image, cropRect: CGRect(x: 0, y: 0, width: 80, height: 50),
+            targetWidth: 320, targetHeight: 200,
+            brightness: 0, contrast: 0, saturation: 0)
+
+        assertClose(buffer[0, 0], cyan, "top-left corner")
+        assertClose(buffer[319, 0], cyan, "top-right corner")
+        assertClose(buffer[0, 199], cyan, "bottom-left corner")
+        assertClose(buffer[319, 199], cyan, "bottom-right corner")
     }
 
     // MARK: - (c) Adjustments
@@ -243,6 +292,67 @@ final class ImageLoadingTests: XCTestCase {
                 TestImageFactory.gradientColor(from: darkGrey, to: lightGrey, width: 320, x: x),
                 "column \(x)")
         }
+    }
+
+    // MARK: - Colour management
+
+    func testWideGamutSourcesAreConvertedToSRGB() throws {
+        // Display P3 (0.5, 0.8, 0.3) in sRGB, computed from the published
+        // P3 → sRGB linear matrix rather than from this pipeline's own output:
+        //   linearise (the two spaces share sRGB's transfer function), apply
+        //   [[ 1.2249, −0.2249, 0     ],
+        //    [−0.0421,  1.0421, 0     ],
+        //    [−0.0196, −0.0786, 1.0983]],
+        //   re-encode, ×255  →  (100, 206, 47).
+        // No component clips, so the prediction is the whole conversion.
+        //
+        // Reading the file's bytes through as if they were sRGB would instead
+        // give (128, 204, 76) — the same red byte in a wider space is a more
+        // saturated colour. Red and blue are therefore ~28 units apart between
+        // the two behaviours, which is what makes this test bite.
+        let file = url("p3.png")
+        TestImageFactory.makeDisplayP3PNG(
+            width: 64, height: 40, solid: (r: 0.5, g: 0.8, b: 0.3), at: file)
+        let image = try ImageLoading.loadCGImage(from: file)
+
+        let buffer = ImageLoading.prepare(
+            image, cropRect: CGRect(x: 0, y: 0, width: 64, height: 40),
+            targetWidth: 32, targetHeight: 20, brightness: 0, contrast: 0, saturation: 0)
+
+        assertClose(buffer[16, 10], RGB(r: 100, g: 206, b: 47), "P3 source converted to sRGB")
+        // Stated separately so a regression reads as "the profile was ignored"
+        // rather than as an unexplained near-miss.
+        XCTAssertNotEqual(
+            Int(buffer[16, 10].r), 128,
+            "reading P3 bytes as sRGB would leave red at 128")
+    }
+
+    func testAdjustmentsAreComputedInTheSRGBWorkingSpace() throws {
+        // The test above pins the *output* space but not the working space: the
+        // render's explicit sRGB colour space converts the result either way.
+        // What the working space changes is the filter arithmetic, and it only
+        // shows once an adjustment is non-neutral — hence the saturation boost.
+        //
+        // Colodore cyan at saturation +1 (inputSaturation 2.0) keeps a red
+        // channel of ~46 when the maths happens in sRGB. In any wider working
+        // space the boost drives red below zero and it clamps to 0 — measured
+        // at 0 for both Display P3 and the unconfigured default. That 46-vs-0
+        // gap is the assertion; the exact 46 is checked loosely because this is
+        // a deliberately extreme boost sitting right on the clamp.
+        let file = url("cyan.png")
+        TestImageFactory.makePNG(
+            width: 320, height: 200, horizontalGradient: cyan, to: cyan, at: file)
+        let image = try ImageLoading.loadCGImage(from: file)
+
+        let buffer = ImageLoading.prepare(
+            image, cropRect: CGRect(x: 0, y: 0, width: 320, height: 200),
+            targetWidth: 160, targetHeight: 200,
+            brightness: 0, contrast: 0, saturation: 1)
+
+        XCTAssertGreaterThan(
+            Int(buffer[80, 100].r), 20,
+            "a wider working space clamps the boosted red to 0; sRGB keeps it near 46")
+        assertClose(buffer[80, 100], RGB(r: 46, g: 225, b: 213), tolerance: 6, "saturation +1")
     }
 
     // MARK: - Crop rectangle conventions
