@@ -16,6 +16,7 @@ Where things are documented (don't duplicate them here):
 - `README.md` — what the tool does, building, CLI usage, trying exports in
   VICE.
 - `docs/superpowers/` — design specs and plans (committed in this repo).
+- `skills/c64-image-conversion/` — agent-facing CLI usage (doc-tested).
 
 ## Layout and architecture
 
