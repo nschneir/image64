@@ -16,7 +16,9 @@ enum ViceLauncher {
     /// VICE: the official macOS app distribution first, then a shell-installed
     /// `x64sc` on `PATH`, then the two fixed Homebrew directories — which cover
     /// the app-bundle case, where the process inherits the launchd default
-    /// `PATH` that omits them.
+    /// `PATH` that omits them. Each route is guarded by an executable check and
+    /// falls through to the next, so a distribution laid out differently than
+    /// the one below degrades to the walk instead of failing outright.
     static func findX64sc() -> URL? {
         // The VICE macOS app distribution registers x64sc.app with
         // LaunchServices; prefer it over a shell install so the app works
@@ -24,9 +26,24 @@ enum ViceLauncher {
         // LaunchServices finds the bundle wherever the user dragged it,
         // whatever the enclosing folder is named — the official download
         // unpacks into a space-bearing folder, so no fixed path would do.
-        if let bundle = NSWorkspace.shared.urlForApplication(
+        //
+        // What we want from the hit is the *enclosing directory*, not the
+        // bundle: `x64sc.app/Contents/MacOS/x64sc` is not the emulator, it is a
+        // Platypus wrapper whose script does `open VICE.app --args <prg>`, and
+        // `open --args` silently drops its arguments when the target app is
+        // already running. Going through it, a second Show in VICE spawns no
+        // process and leaves VICE showing the *first* picture — observed on the
+        // 3.9 app distribution. Every emulator app in that folder is such a
+        // wrapper around one real binary in the sibling VICE.app, so we exec
+        // that binary directly: arguments always arrive, and each invocation
+        // gets its own emulator instance, exactly as the `PATH` route behaves.
+        // It is self-contained — `@executable_path/../lib` for its dylibs,
+        // `../share/vice` for its ROMs — so no wrapper environment is needed.
+        if let stub = NSWorkspace.shared.urlForApplication(
             withBundleIdentifier: "org.viceteam.x64sc") {
-            let binary = bundle.appendingPathComponent("Contents/MacOS/x64sc")
+            let binary = stub
+                .deletingLastPathComponent()
+                .appendingPathComponent("VICE.app/Contents/Resources/bin/x64sc")
             if FileManager.default.isExecutableFile(atPath: binary.path) {
                 return binary
             }
