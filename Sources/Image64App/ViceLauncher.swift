@@ -28,24 +28,36 @@ enum ViceLauncher {
         // unpacks into a space-bearing folder, so no fixed path would do.
         //
         // What we want from the hit is the *enclosing directory*, not the
-        // bundle: `x64sc.app/Contents/MacOS/x64sc` is not the emulator, it is a
-        // Platypus wrapper whose script does `open VICE.app --args <prg>`, and
-        // `open --args` silently drops its arguments when the target app is
-        // already running. Going through it, a second Show in VICE spawns no
-        // process and leaves VICE showing the *first* picture — observed on the
-        // 3.9 app distribution. Every emulator app in that folder is such a
-        // wrapper around one real binary in the sibling VICE.app, so we exec
-        // that binary directly: arguments always arrive, and each invocation
-        // gets its own emulator instance, exactly as the `PATH` route behaves.
-        // It is self-contained — `@executable_path/../lib` for its dylibs,
-        // `../share/vice` for its ROMs — so no wrapper environment is needed.
-        if let stub = NSWorkspace.shared.urlForApplication(
+        // bundle, because neither obvious executable inside that distribution
+        // can be launched the way we launch things (`Process`, one argument, a
+        // fresh emulator each time). Both were tried on the 3.9 distribution:
+        //
+        //  - `x64sc.app/Contents/MacOS/x64sc` is not the emulator, it is a
+        //    Platypus wrapper whose script runs `open VICE.app --args <prg>`,
+        //    and `open --args` silently drops its arguments when the target app
+        //    is already running: the second Show in VICE spawned no process and
+        //    left VICE showing the *first* picture.
+        //  - `VICE.app/Contents/Resources/bin/x64sc`, the real Mach-O, aborts
+        //    on launch — `GLib-GIO-ERROR: No GSettings schemas are installed on
+        //    the system`. Its dylibs resolve by rpath, but this GTK build also
+        //    needs `XDG_DATA_DIRS`, `GTK_PATH`, `GDK_PIXBUF_MODULE_FILE` and
+        //    friends pointed inside the bundle, which only VICE's own
+        //    `bin/common-runtime.sh` + `bin/ui-runtime.sh` know how to set.
+        //
+        // `<dir>/bin/x64sc` is the distribution's documented terminal launcher
+        // and the one entry point that is all three things at once: it sources
+        // that environment (via `VICE.app/Contents/Resources/script`), passes
+        // `"$@"` straight through, and execs the emulator itself, so each call
+        // gets its own instance — exactly how the `PATH` route behaves. It is a
+        // `#!/bin/bash` script, which `Process` runs by shebang; the `.prg` path
+        // we hand it is absolute, so its working directory never matters.
+        if let bundle = NSWorkspace.shared.urlForApplication(
             withBundleIdentifier: "org.viceteam.x64sc") {
-            let binary = stub
+            let launcher = bundle
                 .deletingLastPathComponent()
-                .appendingPathComponent("VICE.app/Contents/Resources/bin/x64sc")
-            if FileManager.default.isExecutableFile(atPath: binary.path) {
-                return binary
+                .appendingPathComponent("bin/x64sc")
+            if FileManager.default.isExecutableFile(atPath: launcher.path) {
+                return launcher
             }
         }
 
