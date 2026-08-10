@@ -2,24 +2,56 @@ name: Release
 on:
   push:
     tags: ['v*']
+  # Manual runs are deliberately allowed and are a smoke test, not a release:
+  # every step below runs except Create Release, which is guarded on the ref
+  # being a v-tag. So a dispatch exercises checkout → toolchain → swift test →
+  # make-app.sh → ditto and stops before it can create public repo state.
   workflow_dispatch: {}
 jobs:
   build:
-    runs-on: macos-14
+    # macos-15, not macos-14: macos-14 is at the end of its runner life, and its
+    # default toolchain is an Xcode 15.x that cannot even resolve this package —
+    # swift-argument-parser 1.8.2 (pinned in Package.resolved) ships a
+    # `swift-tools-version:6.0` manifest, so dependency resolution needs Swift 6
+    # / Xcode 16+. Building on a newer runner does not raise what we ship:
+    # the deployment floor comes from `.macOS(.v14)` in Package.swift and
+    # LSMinimumSystemVersion 14.0 in the bundle, not from the runner's OS.
+    runs-on: macos-15
     permissions:
       contents: write   # gh release create needs this
+    env:
+      # Pinned rather than inherited so a runner-image bump cannot silently
+      # change the compiler that builds a release. Xcode 16.4 is the latest
+      # Xcode 16 preinstalled on the macos-15 image (see the image's
+      # "Installed Software" manifest in actions/runner-images); it provides
+      # the Swift 6 toolchain resolution needs, while Package.swift keeps
+      # declaring swift-tools-version 5.10, so the language mode stays 5.
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
       - name: Test
         run: swift test
       - name: Build .app bundle
-        run: scripts/make-app.sh
+        # The tag drives the version written into the bundle's Info.plist. On a
+        # workflow_dispatch GITHUB_REF_NAME is a branch name, which is nonsense
+        # as a version, so the smoke run falls back to the script's default.
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+              scripts/make-app.sh "${GITHUB_REF_NAME#v}"
+          else
+              scripts/make-app.sh
+          fi
       - name: Zip .app (ditto preserves Finder attributes; zip mangles them)
         run: |
           version="${GITHUB_REF_NAME}"
           ditto -c -k --sequesterRsrc --keepParent \
               dist/image64.app "image64-${version}.app.zip"
       - name: Create Release
+        # Tags only. Without this, a workflow_dispatch from `main` would run
+        # `gh release create main …` and publish a Release under a bogus tag —
+        # public, hard-to-undo repo state from a run whose whole purpose was to
+        # rehearse the build.
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

@@ -12,6 +12,18 @@
 # Unsigned and un-notarized, for local use: Gatekeeper will want a
 # right-click ▸ Open the first time. There is no icon in v1 either — the
 # generic one is honest for an alpha.
+#
+# Usage: scripts/make-app.sh [version]
+#
+# The optional version is what the bundle claims it is. It goes into
+# CFBundleShortVersionString (what Finder and the About panel show) and
+# CFBundleVersion (the build number LaunchServices and Gatekeeper expect to
+# exist; there is no separate build counter in this project, so the two are the
+# same string). `.github/workflows/release.yml` passes the pushed tag with its
+# leading `v` stripped, so a `v0.2.0` release ships a bundle that says 0.2.0
+# instead of a hardcoded literal. A bare local run gets the development
+# default below, which is also the fallback the About panel uses under
+# `swift run Image64App` where there is no bundle to read at all.
 
 set -euo pipefail
 
@@ -19,9 +31,18 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 APP="dist/image64.app"
+VERSION="${1:-0.1.0}"
 
-swift build -c release
-BIN_PATH="$(swift build -c release --show-bin-path)"
+# Universal so one downloaded .app runs on both Apple Silicon and Intel Macs
+# still supported by the macOS 14 floor. A single-arch build on an arm64 runner
+# would hand an Intel user an opaque "app is damaged"-class failure. Two-arch
+# builds do not land in `--show-bin-path`'s usual `.build/release`: SwiftPM
+# routes them through its Xcode-style layout at .build/apple/Products/Release,
+# which is what `--show-bin-path` reports back when the same --arch flags are
+# passed, so the path is asked for rather than assumed.
+ARCHS=(--arch arm64 --arch x86_64)
+swift build -c release "${ARCHS[@]}"
+BIN_PATH="$(swift build -c release "${ARCHS[@]}" --show-bin-path)"
 
 # Rebuilt from scratch each time: a stale binary or a leftover file inside a
 # bundle is the kind of thing that only shows up as inexplicable runtime
@@ -30,7 +51,11 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp "$BIN_PATH/Image64App" "$APP/Contents/MacOS/Image64App"
 
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+# Unquoted heredoc delimiter so ${VERSION} expands. Nothing else in this plist
+# body is a shell metacharacter — no `$`, no backticks, no `\` — so the only
+# substitution that happens is the intended one. Keep it that way if you add
+# keys: a literal `$` here would need escaping.
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -46,7 +71,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>${VERSION}</string>
+	<key>CFBundleVersion</key>
+	<string>${VERSION}</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>CFBundleDocumentTypes</key>
@@ -64,4 +91,4 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-echo "Built $APP"
+echo "Built $APP (version ${VERSION})"
