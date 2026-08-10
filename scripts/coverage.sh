@@ -45,6 +45,11 @@ if [ ! -f "$TEST_BINARY" ]; then
     exit 1
 fi
 
+# The two source directories below are an allowlist, not a discovery: llvm-cov
+# only measures what it is handed. A new `Sources/<Target>` is therefore OUTSIDE
+# the gate until its directory is added to this list — silently, with the TOTAL
+# still reading green. Add it here in the same commit that adds the target
+# (unless it is UI-only, like Sources/Image64App, per the Scope note above).
 REPORT=$(
     xcrun llvm-cov report \
         "$TEST_BINARY" \

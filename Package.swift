@@ -34,10 +34,15 @@ let package = Package(
         .testTarget(
             name: "C64KitTests",
             dependencies: ["C64Kit", "TestSupport"],
-            // Golden fixtures — small binary files copied into the test bundle so
-            // the golden tests read the exact bytes committed to the repo, not
-            // whatever the pipeline happens to produce today.
-            resources: [.copy("Fixtures")]
+            // `Fixtures` is excluded rather than copied as a resource,
+            // deliberately. A bundle copy would only be a second, throwaway
+            // copy of the goldens: `GoldenTests` reaches the *source tree* by
+            // walking up from `#filePath`, because regenerating a golden means
+            // writing a candidate back into the repo and a bundle resource is
+            // read-only. The committed bytes under `Fixtures/` are the
+            // contract; nothing reads `Bundle.module`. Excluding says so to
+            // SwiftPM, which would otherwise warn about unhandled files.
+            exclude: ["Fixtures"]
         ),
         // Depends on the executable so `swift test` is guaranteed to have built
         // the binary these tests spawn, and on `C64Kit` for the lockstep test
