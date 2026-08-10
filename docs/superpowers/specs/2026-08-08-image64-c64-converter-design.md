@@ -348,11 +348,12 @@ VICE** (⌘R):
    Detection now asks LaunchServices first
    (`NSWorkspace.shared.urlForApplication(withBundleIdentifier:
    "org.viceteam.x64sc")`), with the existing `PATH`/Homebrew walk as
-   fallback. The launched executable is the real emulator beside the
-   registered bundle (`VICE.app/Contents/Resources/bin/x64sc`), not the
-   bundle's Platypus stub — the stub's internal `open --args` drops the
-   file argument when VICE is already running, silently showing a stale
-   picture on the second use.
+   fallback. The launched executable is the distribution's `bin/x64sc`
+   launcher script beside the registered bundle — the bundle's Platypus
+   stub drops the file argument when VICE is already running (stale
+   picture on second use), and the raw emulator binary aborts without the
+   wrapper environment; the launcher script is env-correct,
+   argv-preserving, and fresh-instance-per-call.
    Launch mechanics are unchanged: temp `.prg`, `Process`, autostart.
 2. **Discoverability.** The window toolbar gains a **Show in VICE** button
    ahead of the Export menu — same action and enablement as the menu item
