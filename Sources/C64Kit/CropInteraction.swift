@@ -54,7 +54,10 @@ public enum CropInteraction {
     /// - `minWidth`: the narrowest width the caller is willing to accept, in
     ///   source pixels. The result is clamped up to `minWidth` *rounded up
     ///   to the nearest multiple of eight* — see the width-snap paragraph
-    ///   below for why the eight-grid is not negotiable.
+    ///   below for why the eight-grid is not negotiable. It is a floor, not a
+    ///   guarantee: a source too small to hold `minWidth` gets the largest
+    ///   legal crop instead, because staying inside the source outranks it
+    ///   (see `resize`).
     ///
     /// Corner and edge handles resize about the opposite anchor; `body`
     /// translates the rectangle without changing its size and stops flush
@@ -118,6 +121,17 @@ public enum CropInteraction {
     /// (a ceil there would push the far edge off-canvas). Both edges of the
     /// clamp therefore land on integers by construction, and the height that
     /// falls out of `width · 5 / 8` is a multiple of five.
+    ///
+    /// **When the two limits disagree, `upper` wins.** A source smaller than
+    /// the caller's `minWidth` — a 64×40 image against the app's 80-pixel
+    /// `minCropWidth` — leaves no width that is both ≥ `minWidth` and inside
+    /// the image. "Stays inside the source" is one of the three invariants this
+    /// file documents; `minWidth` is a comfort guardrail against a drag
+    /// collapsing the rect to a sliver. So the floor is clamped down to the
+    /// room actually available rather than the other way round. Letting the
+    /// floor win instead returned a rect outside `bounds`, which `effectiveCrop`
+    /// then clipped downstream — turning a legal-looking drag into a non-8:5
+    /// sample and a stretched conversion.
     private static func resize(
         _ rect: CGRect, handle: CropHandle, by delta: CGSize,
         in bounds: CGSize, minWidth: CGFloat
@@ -125,9 +139,15 @@ public enum CropInteraction {
         let (anchor, point) = anchor(for: handle, of: rect)
         let raw = targetWidth(for: handle, rect: rect, delta: delta)
 
-        let lower = ceilToEight(Swift.max(minWidth, aspectWidth))
-        let upper = floorToEight(maxWidth(from: anchor, at: point, in: bounds))
-        let newWidth = clamp(floorToEight(raw), lower, Swift.max(lower, upper))
+        // `max(0, …)` only bites if `rect` was already outside `bounds` on
+        // entry, which no caller can produce through this function: for any
+        // rect legally inside the source the anchor leaves at least one
+        // eight-column step of room in both directions, so `upper >= 8`.
+        // It is here so a bad rect degrades to a degenerate-but-inside result
+        // rather than a negative-width one.
+        let upper = Swift.max(0, floorToEight(maxWidth(from: anchor, at: point, in: bounds)))
+        let lower = Swift.min(ceilToEight(Swift.max(minWidth, aspectWidth)), upper)
+        let newWidth = clamp(floorToEight(raw), lower, upper)
         let newHeight = newWidth * aspectHeight / aspectWidth
 
         return place(anchor: anchor, at: point, width: newWidth, height: newHeight)

@@ -299,4 +299,41 @@ final class CropInteractionTests: XCTestCase {
             result, CGRect(x: 100, y: 60, width: 80, height: 50),
             "corner drag clamps at (anchor, minWidth × minWidth·5/8)")
     }
+
+    func testMinWidthLosesToTheSourceWhenTheSourceIsSmaller() {
+        // The source is smaller than the caller's minimum: a 64×40 image with
+        // the app's 80-pixel `minCropWidth` (`CropView.minCropWidth`). Both
+        // cannot hold, and "the rectangle stays inside the source" is the
+        // documented invariant — the minimum is a comfort guardrail — so the
+        // minimum is what gives way.
+        //
+        // Before the fix the clamp floor won: an outward bottom-right drag
+        // returned 80×50 anchored at (0,0), i.e. a crop 16 columns and 10 rows
+        // outside a 64×40 image. `effectiveCrop` then silently clipped it back
+        // to 64×40 in the pipeline, which is no longer 8:5 — a stretched
+        // conversion from a drag the user was told was legal.
+        let bounds = CGSize(width: 64, height: 40)
+        let start = CGRect(x: 0, y: 0, width: 64, height: 40)
+
+        for (label, handle, delta) in [
+            ("grow", CropHandle.bottomRight, CGSize(width: 500, height: 500)),
+            ("shrink", CropHandle.bottomRight, CGSize(width: -500, height: -500)),
+            ("right edge", CropHandle.right, CGSize(width: 500, height: 0)),
+            ("bottom edge", CropHandle.bottom, CGSize(width: 0, height: 500)),
+            ("top left", CropHandle.topLeft, CGSize(width: -500, height: -500)),
+        ] {
+            let result = CropInteraction.drag(
+                start, handle: handle, by: delta, in: bounds, minWidth: 80)
+
+            XCTAssertGreaterThanOrEqual(result.minX, 0, "left edge escaped — \(label)")
+            XCTAssertGreaterThanOrEqual(result.minY, 0, "top edge escaped — \(label)")
+            XCTAssertLessThanOrEqual(
+                result.maxX, bounds.width, "right edge escaped — \(label)")
+            XCTAssertLessThanOrEqual(
+                result.maxY, bounds.height, "bottom edge escaped — \(label)")
+            XCTAssertEqual(
+                result.width * 5, result.height * 8, "not 8:5 — \(label)")
+            XCTAssertGreaterThan(result.width, 0, "collapsed to nothing — \(label)")
+        }
+    }
 }
