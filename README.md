@@ -82,6 +82,15 @@ prefer an IDE. The conversion engine is `C64Kit`, a UI-free library target
 with its own test suite; the app and the `image64` CLI are thin front ends
 over it.
 
+## Download
+
+A signed release is not yet published. Pre-built `image64.app` bundles are
+attached to each [GitHub
+Release](https://github.com/nschneir/image64/releases). Unzip, drag to
+Applications, and — because the bundle is unsigned in v1 — right-click the
+app and choose **Open** the first time to approve it past Gatekeeper.
+Requires macOS 14 or newer.
+
 ## Trying the output
 
 A `.koa` or `.art` is the standard interchange format for its mode — raw

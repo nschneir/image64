@@ -1,0 +1,30 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: {}
+jobs:
+  build:
+    runs-on: macos-14
+    permissions:
+      contents: write   # gh release create needs this
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        run: swift test
+      - name: Build .app bundle
+        run: scripts/make-app.sh
+      - name: Zip .app (ditto preserves Finder attributes; zip mangles them)
+        run: |
+          version="${GITHUB_REF_NAME}"
+          ditto -c -k --sequesterRsrc --keepParent \
+              dist/image64.app "image64-${version}.app.zip"
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME}"
+          gh release create "${version}" \
+              "image64-${version}.app.zip" \
+              --title "image64 ${version}" \
+              --generate-notes

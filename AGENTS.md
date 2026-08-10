@@ -66,6 +66,17 @@ routine commands into approval prompts.
 without asking.** The gate is you, running the affected tests before you
 commit; nothing downstream will catch what you skip.
 
+### Releases
+
+```sh
+# cut a release: workflow zips dist/image64.app and attaches it
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The tag drives `.github/workflows/release.yml`. Only the maintainer pushes
+tags — the same rule that governs every other push; an agent never does.
+
 ## Code quality
 
 - Swift 5.10+, SwiftUI-first; no third-party dependencies without maintainer
