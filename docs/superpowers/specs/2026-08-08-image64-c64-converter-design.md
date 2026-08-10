@@ -347,8 +347,12 @@ VICE** (⌘R):
    the command stays permanently disabled on machines with only the app.
    Detection now asks LaunchServices first
    (`NSWorkspace.shared.urlForApplication(withBundleIdentifier:
-   "org.viceteam.x64sc")`, binary at `Contents/MacOS/x64sc` inside the
-   returned bundle), with the existing `PATH`/Homebrew walk as fallback.
+   "org.viceteam.x64sc")`), with the existing `PATH`/Homebrew walk as
+   fallback. The launched executable is the real emulator beside the
+   registered bundle (`VICE.app/Contents/Resources/bin/x64sc`), not the
+   bundle's Platypus stub — the stub's internal `open --args` drops the
+   file argument when VICE is already running, silently showing a stale
+   picture on the second use.
    Launch mechanics are unchanged: temp `.prg`, `Process`, autostart.
 2. **Discoverability.** The window toolbar gains a **Show in VICE** button
    ahead of the Export menu — same action and enablement as the menu item
