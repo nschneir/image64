@@ -9,7 +9,8 @@ image64 is a native macOS tool that converts modern images into pictures that
 satisfy the Commodore 64's bitmap-mode display constraints. It is both a
 windowed app — drag an image in, crop it, watch the live C64 preview — and an
 `image64` command-line tool for scripted use; the two front ends execute the
-same engine code, and exports load on real hardware or in the VICE emulator.
+same engine code, and exports are the native C64 formats plus a runnable
+program that puts the picture on screen on real hardware or in VICE.
 
 It is a companion to [Project64](../Project64), the agentic C64 development
 toolset; exported images drop straight into that workflow.
@@ -31,14 +32,15 @@ toolset; exported images drop straight into that workflow.
   ordered Bayer, or none), brightness / contrast / saturation, and palette
   (Colodore or Pepto).
 - **Export** native C64 files — Koala (`.koa`) for multicolor, Art Studio
-  (`.art`) for hires — plus a modern PNG of the converted image. The preview
-  is rendered from the exact bytes that get exported, so what you see is what
-  the C64 shows.
+  (`.art`) for hires — and a runnable `.prg`, a self-displaying C64 program
+  for emulators and real hardware. The preview is rendered from the exact
+  bytes that get exported, so what you see is what the C64 shows.
 - **Script it** with the CLI, which runs the identical conversion code:
 
       image64 convert photo.jpg -o picture.koa            # multicolor, from .koa
       image64 convert photo.jpg -o picture.art            # hires, from .art
       image64 convert photo.jpg -o out.koa --dither bayer --palette colodore
+      image64 convert photo.jpg -o out.koa --prg out.prg  # + a program that shows it
 
   Every command takes `--json` for machine-readable output — the intended
   interface for AI agents, as in [Project64](../Project64). Outputs
@@ -49,7 +51,13 @@ toolset; exported images drop straight into that workflow.
       done
 
   AI agents get a doc-tested skill covering the full CLI surface and the
-  VICE verification loop: `skills/c64-image-conversion/SKILL.md`.
+  VICE verification loop: `skills/c64-image-conversion/SKILL.md`. Its
+  self-check step uses `--png`, which renders the packed C64 bytes back out
+  as a picture an agent or a golden test can look at (640×400 — the display
+  geometry, hires pixels scaled ×2/×2 and multicolor ×4/×2, so both modes
+  land on the same canvas with the right proportions rather than a
+  half-width-squashed 160×200 buffer). It is a verification rendering, not
+  an output format.
 
 ## Status
 
@@ -74,15 +82,19 @@ over it.
 
 ## Trying the output
 
-Exported files load anywhere C64 software runs. With
-[VICE](https://vice-emu.sourceforge.io/) installed:
+A `.koa` or `.art` is the standard interchange format for its mode — raw
+display data that C64 paint programs and viewers read, not something the
+machine can run on its own. To actually *see* a conversion, export the
+runnable PRG alongside it. With [VICE](https://vice-emu.sourceforge.io/)
+installed:
 
-    x64sc picture.koa
+    image64 convert photo.jpg -o picture.koa --prg picture.prg
+    x64sc picture.prg
 
 or, using [Project64](../Project64)'s CLI:
 
     c64 session start
-    c64 run picture.koa
+    c64 run picture.prg
 
 ## AI Disclosure
 

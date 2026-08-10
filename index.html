@@ -333,13 +333,14 @@ image64 convert photo.jpg -o out.koa --dither bayer --palette colodore --json</p
         </p>
       </div>
     </div>
-    <p>Plus a PNG of the converted image (640×400) for use anywhere else.
-    Exports are the standard layouts used by existing C64 software — they load in
-    <a href="https://vice-emu.sourceforge.io/">VICE</a>, on real hardware, and in the
-    usual viewers. With the neighboring
+    <p>Plus a runnable <code>.prg</code> — a self-displaying program that shows the
+    picture anywhere a C64 runs, in
+    <a href="https://vice-emu.sourceforge.io/">VICE</a> or on real hardware — while the
+    <code>.koa</code> and <code>.art</code> files are the standard interchange layouts
+    that existing C64 paint programs and viewers read. With the neighboring
     <a href="https://github.com/nschneir/Project64">Project 64</a> toolset:</p>
     <div class="code"><pre>c64 session start
-c64 run picture.koa    <span class="cm"># display it on the emulated machine</span></pre></div>
+c64 run picture.prg    <span class="cm"># display it on the emulated machine</span></pre></div>
   </section>
 
   <section id="status" class="reveal">

@@ -1,6 +1,6 @@
 ---
 name: c64-image-conversion
-description: Use when converting a modern image (PNG, JPEG, HEIC, …) into a Commodore 64 bitmap-mode picture — a Koala (.koa) or Art Studio (.art) file, or a C64-constrained PNG — using the image64 CLI. Covers mode choice, cropping, dithering, palettes, the --json output, and verifying the result on an emulated C64.
+description: Use when converting a modern image (PNG, JPEG, HEIC, …) into a Commodore 64 bitmap-mode picture — a Koala (.koa) or Art Studio (.art) file, plus an optional runnable .prg that displays it — using the image64 CLI. Covers mode choice, cropping, dithering, palettes, the --json output, and verifying the result on an emulated C64.
 ---
 
 ## Finding the binary
@@ -20,13 +20,14 @@ Do not substitute another C64 image converter if the build fails. Stop and repor
 Full synopsis:
 
 ```
-image64 convert <input> --output <out.koa|out.art> [--png <out.png>] [--mode <mode>] [--crop <x,y,w,h>] [--dither <dither>] [--palette <palette>] [--brightness <n>] [--contrast <n>] [--saturation <n>] [--json]
+image64 convert <input> --output <out.koa|out.art> [--prg <out.prg>] [--png <out.png>] [--mode <mode>] [--crop <x,y,w,h>] [--dither <dither>] [--palette <palette>] [--brightness <n>] [--contrast <n>] [--saturation <n>] [--json]
 ```
 
 Options:
 
 - `--output` (`-o`): where to write the C64 picture. Required. The extension picks the format: `.koa` = Koala Painter, `.art` = Advanced Art Studio.
-- `--png`: also write a 640×400 PNG rendered from the exact packed C64 bytes. Optional but always worth passing — the PNG is the fastest way to see whether the C64 file is right.
+- `--prg`: also write a runnable C64 program that displays the picture — a self-contained `.prg` that sets up the VIC-II and shows the image when it is loaded and run. This is the artifact to hand to an emulator or real hardware; a bare `.koa`/`.art` is display data, not a program. Can be passed without `--output` if the program is all you want.
+- `--png`: also write a 640×400 PNG rendered from the exact packed C64 bytes. Not a C64 format — it is a verification rendering, for your own eyes and for the golden tests. Worth passing on any conversion you intend to check.
 - `--mode`: `hires` or `multicolor`. Optional. The output extension already implies a mode; `--mode` only exists so you can force a mismatch when you want one. See the mode-inference rule below.
 - `--crop`: crop rectangle `x,y,w,h` in source pixels, y = 0 at the top. The `h` you type is ignored and recomputed as `round(w × 5 / 8)` so the frame is always the 8:5 shape the C64 needs. Defaults to the largest centred 8:5 rectangle of the source.
 - `--dither`: `none`, `bayer`, or `fs`. Default `fs` (Floyd–Steinberg). Controls how quantization error is spread before the palette snap.
@@ -77,7 +78,7 @@ With `--json`, the CLI writes exactly one JSON object to stdout and nothing else
 Keys:
 
 - `input` — the source path that was read.
-- `outputs` — every file that was written, in the order they were produced. Always includes the C64 output; also includes the PNG when `--png` was given.
+- `outputs` — every file that was written, in the order they were produced. Includes the C64 output, plus the runnable program when `--prg` was given and the PNG when `--png` was given.
 - `mode` — the mode actually used (`multicolor` or `hires`), after any inference from the output extension.
 - `palette` — the palette name applied (`colodore` or `pepto`).
 - `dither` — the dither strategy applied (`none`, `bayer`, or `fs`).
@@ -86,7 +87,7 @@ Keys:
 
 ## Seeing the result yourself
 
-Always pass `--png` alongside the C64 output and look at the PNG. The PNG is rendered directly from the packed C64 bytes, so it is a faithful preview: if the PNG looks right, the `.koa` or `.art` is right, and if the PNG looks wrong, so is the C64 file.
+Always pass `--png` alongside the C64 output and look at the PNG. The PNG is rendered directly from the packed C64 bytes, so it is a faithful preview: if the PNG looks right, the `.koa` or `.art` is right, and if the PNG looks wrong, so is the C64 file. It is a verification rendering rather than a C64 format — 640×400 because that is the display geometry (hires pixels scaled ×2/×2, multicolor ×4/×2), so both modes land on the same canvas in the proportions a C64 would show.
 
 Iterate by rerunning the same command with adjusted `--crop`, `--dither`, `--brightness`, `--contrast`, or `--saturation`, then re-viewing the PNG. Each rerun overwrites the previous outputs, so the loop is cheap.
 
@@ -104,15 +105,21 @@ If the loop should stop on the first failure, check `$?` after each call (or run
 
 ## Verifying on a C64
 
+A `.koa` or `.art` is display data, not a program: an emulator cannot run one directly. Convert with `--prg` and verify that instead:
+
+```sh
+image64 convert photo.jpg -o picture.koa --prg picture.prg
+```
+
 The neighboring Project64 checkout ships a `c64` CLI that automates a VICE session end-to-end. It requires Project64 to be present on disk and VICE to be installed. Because Project64's verbs are bare words rather than options, keep the example in a `text` fence so it does not get read as image64 syntax:
 
 ```text
 c64 session start
-c64 run picture.koa
+c64 run picture.prg
 c64 screen
 c64 session stop
 ```
 
-`c64 run` hands the file to the appropriate display program on the emulated machine; `c64 screen` captures what the VIC-II is drawing.
+`c64 run` loads and starts the program on the emulated machine; `c64 screen` captures what the VIC-II is drawing, which is the picture. If you have VICE but not Project64, `x64sc picture.prg` does the same thing by hand.
 
 A quick sanity check without an emulator: the native formats are fixed sizes. A `.koa` file is exactly 10003 bytes ($6000 load address plus 10001 data bytes). A `.art` file is exactly 9009 bytes ($2000 load address plus 9007 data bytes). Anything else is a broken write.

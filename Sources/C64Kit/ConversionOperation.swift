@@ -3,9 +3,10 @@ import Foundation
 
 /// Everything one conversion needs to know.
 ///
-/// The two output URLs are independent and both optional: the CLI sets one or
-/// both, and the app's live preview sets neither and reads the picture out of
-/// the result. That is the same call in all three cases, which is the point.
+/// The three output URLs are independent and all optional: the CLI sets
+/// whichever it was asked for, and the app's live preview sets none of them and
+/// reads the picture out of the result. That is the same call in every case,
+/// which is the point.
 public struct ConversionRequest: Sendable {
     /// The image to convert.
     public var inputURL: URL
@@ -32,6 +33,14 @@ public struct ConversionRequest: Sendable {
     /// Where to write a 640×400 PNG of the result. `nil` writes no PNG.
     public var pngOutputURL: URL?
 
+    /// Where to write a runnable `.prg` that displays the picture. `nil` writes
+    /// no program.
+    ///
+    /// Unconstrained by the path extension, unlike `c64OutputURL`: a PRG is a
+    /// program rather than a format, it encodes both modes, and `.prg` is a
+    /// convention rather than something a loader reads.
+    public var prgOutputURL: URL?
+
     /// Creates a request for `inputURL` with `settings`, no explicit crop and
     /// no outputs. The optional fields are `var`s, so a caller that wants them
     /// sets them after; a caller that wants an in-memory conversion — the app —
@@ -57,7 +66,7 @@ public struct ConversionResult: Sendable {
     public let cropUsed: CGRect
 
     /// The files written, in the order they were written: the C64 file first,
-    /// then the PNG. Empty for an in-memory conversion.
+    /// then the PNG, then the PRG. Empty for an in-memory conversion.
     public let writtenFiles: [URL]
 }
 
@@ -137,7 +146,7 @@ public enum ConversionOperation {
     /// Converts the image at `request.inputURL` and writes whatever outputs the
     /// request names.
     ///
-    /// With both output URLs `nil` this is a pure in-memory conversion that
+    /// With every output URL `nil` this is a pure in-memory conversion that
     /// touches the file system only to read the input — which is how the app's
     /// preview uses it.
     ///
@@ -181,6 +190,16 @@ public enum ConversionOperation {
         if let url = request.pngOutputURL {
             try ImageLoading.writePNG(
                 previewImage(for: image, palette: request.settings.palette), to: url)
+            writtenFiles.append(url)
+        }
+        if let url = request.prgOutputURL {
+            do {
+                try C64PrgWriter.data(for: image).write(to: url)
+            } catch {
+                // Same collapse as the C64 file above: one type for every
+                // file-system failure in the pipeline.
+                throw ImageLoadingError.unwritable(url)
+            }
             writtenFiles.append(url)
         }
 

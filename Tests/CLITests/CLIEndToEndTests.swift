@@ -348,6 +348,85 @@ final class CLIEndToEndTests: XCTestCase {
             "the message should name the file: \(run.standardError)")
     }
 
+    // MARK: - The runnable program
+
+    /// The first two bytes of `url`, which for a PRG are its load address.
+    private func loadAddress(of url: URL) throws -> [UInt8] {
+        Array(try Data(contentsOf: url).prefix(2))
+    }
+
+    func testPRGIsWrittenAlongsideTheC64FileAndListedInTheReport() throws {
+        let source = makeSource()
+        let c64 = url("out.koa")
+        let prg = url("out.prg")
+
+        let run = try runCLI([
+            "convert", source.path, "-o", c64.path, "--prg", prg.path, "--json",
+        ])
+        XCTAssertEqual(run.status, 0, run.standardError)
+
+        // $0801, low byte first: where a BASIC program loads, which is what
+        // makes the file runnable rather than a memory dump.
+        XCTAssertEqual(try loadAddress(of: prg), [0x01, 0x08])
+
+        let report = try JSONDecoder().decode(
+            ConversionReport.self, from: Data(run.standardOutput.utf8))
+        XCTAssertEqual(report.outputs, [c64.path, prg.path])
+    }
+
+    /// A PRG is a program rather than a format, so it needs no `.koa` or `.art`
+    /// beside it — and asking for one anyway would mean converting the picture
+    /// twice into two files to get one.
+    func testPRGCanBeTheOnlyOutput() throws {
+        let source = makeSource()
+        let prg = url("only.prg")
+
+        let run = try runCLI(["convert", source.path, "--prg", prg.path, "--json"])
+        XCTAssertEqual(run.status, 0, run.standardError)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: prg.path))
+        XCTAssertEqual(try loadAddress(of: prg), [0x01, 0x08])
+
+        let report = try JSONDecoder().decode(
+            ConversionReport.self, from: Data(run.standardOutput.utf8))
+        XCTAssertEqual(report.outputs, [prg.path])
+        // No output extension to infer a mode from, so the default stands.
+        XCTAssertEqual(report.mode, "multicolor")
+        XCTAssertEqual(try byteCount(of: prg), 10157)
+    }
+
+    func testPRGOnlyStillHonoursAnExplicitMode() throws {
+        let source = makeSource()
+        let prg = url("hires.prg")
+
+        let run = try runCLI([
+            "convert", source.path, "--prg", prg.path, "--mode", "hires", "--json",
+        ])
+        XCTAssertEqual(run.status, 0, run.standardError)
+
+        let report = try JSONDecoder().decode(
+            ConversionReport.self, from: Data(run.standardOutput.utf8))
+        XCTAssertEqual(report.mode, "hires")
+        XCTAssertEqual(try byteCount(of: prg), 9123)
+    }
+
+    /// Neither output flag means the command would read an image, convert it,
+    /// and drop the result — worth refusing rather than exiting 0 having done
+    /// nothing.
+    func testRefusingToRunWithNothingToWrite() throws {
+        let source = makeSource()
+
+        let run = try runCLI(["convert", source.path])
+
+        XCTAssertEqual(run.status, 1)
+        XCTAssertTrue(
+            run.standardError.contains("--output"),
+            "the message should name --output: \(run.standardError)")
+        XCTAssertTrue(
+            run.standardError.contains("--prg"),
+            "the message should name --prg: \(run.standardError)")
+    }
+
     /// The overwrite promise is part of the documented interface, not just the
     /// implementation, so the help text has to say it.
     func testHelpDocumentsTheOverwriteBehaviour() throws {

@@ -93,6 +93,16 @@ struct Image64AppMain: App {
                 Button("Export C64 File…") { exportC64File(model: model) }
                     .keyboardShortcut("e", modifiers: .command)
                     .disabled(model.converted == nil)
+                Button("Export Runnable PRG…") { exportPRG(model: model) }
+                    .disabled(model.converted == nil)
+                Divider()
+                // Disabled rather than hidden when VICE is absent: a hidden
+                // command teaches the user the feature does not exist, a
+                // disabled one that something is missing (`brew install
+                // vice`). The README and skill spell out the install.
+                Button("Show in VICE") { showInVICE(model: model) }
+                    .keyboardShortcut("r", modifiers: .command)
+                    .disabled(model.converted == nil || ViceLauncher.findX64sc() == nil)
             }
         }
     }
@@ -172,6 +182,18 @@ private struct RootView: View {
         }
         .frame(minWidth: 340, maxWidth: .infinity, maxHeight: .infinity)
         .layoutPriority(1)
+    }
+}
+
+@MainActor
+private func showInVICE(model: AppModel) {
+    guard let converted = model.converted else { return }
+    do {
+        try ViceLauncher.show(
+            converted,
+            title: model.sourceURL?.deletingPathExtension().lastPathComponent ?? "image64")
+    } catch {
+        NSAlert(error: error).runModal()
     }
 }
 

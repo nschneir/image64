@@ -89,10 +89,16 @@ struct ConvertCommand: ParsableCommand {
         name: .shortAndLong,
         help: ArgumentHelp(
             "Where to write the C64 picture.", valueName: "out.koa|out.art"))
-    var output: String
+    var output: String?
 
     @Option(help: ArgumentHelp("Also write a 640×400 PNG of the result.", valueName: "out.png"))
     var png: String?
+
+    @Option(
+        help: ArgumentHelp(
+            "Also write a runnable C64 program (.prg) that displays the picture when loaded.",
+            valueName: "out.prg"))
+    var prg: String?
 
     @Option(help: "Bitmap mode. Defaults to the one the output extension implies.")
     var mode: BitmapMode?
@@ -143,6 +149,13 @@ struct ConvertCommand: ParsableCommand {
     /// crop against the source, the extension, the mode against the format — is
     /// left to the engine, which is the only place that knows.
     func validate() throws {
+        // `--png` is deliberately not enough on its own: it is a *preview* of a
+        // conversion, and a run that produced only one would have converted the
+        // image for the C64 and then thrown the C64 away.
+        guard output != nil || prg != nil else {
+            throw ValidationError(
+                "give --output, --prg, or both — there is nothing to write otherwise")
+        }
         try validateAdjustment(brightness, named: "brightness")
         try validateAdjustment(contrast, named: "contrast")
         try validateAdjustment(saturation, named: "saturation")
@@ -198,14 +211,17 @@ struct ConvertCommand: ParsableCommand {
 
     private func convert() throws -> ConversionReport {
         let inputURL = URL(fileURLWithPath: input)
-        let outputURL = URL(fileURLWithPath: output)
+        let outputURL = output.map { URL(fileURLWithPath: $0) }
 
         var settings = ConversionSettings()
         // The override happens here, before the request exists, so the engine
         // sees one mode and can treat a disagreement with the format as the
         // error it is. Bending the format to match the mode instead would write
         // a file whose readers assume the opposite.
-        settings.mode = mode ?? inferredMode(for: outputURL) ?? settings.mode
+        //
+        // A `--prg`-only run has no format to infer from — a PRG carries both
+        // modes — so it keeps the default unless `--mode` says otherwise.
+        settings.mode = mode ?? outputURL.flatMap(inferredMode(for:)) ?? settings.mode
         settings.dither = dither
         settings.palette = palette
         settings.brightness = brightness
@@ -215,6 +231,7 @@ struct ConvertCommand: ParsableCommand {
         var request = ConversionRequest(inputURL: inputURL, settings: settings)
         request.c64OutputURL = outputURL
         request.pngOutputURL = png.map { URL(fileURLWithPath: $0) }
+        request.prgOutputURL = prg.map { URL(fileURLWithPath: $0) }
         request.cropRect = try snappedCrop(source: inputURL)
 
         let result = try ConversionOperation.run(request)

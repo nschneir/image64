@@ -14,6 +14,7 @@ import C64Kit
 // macOS 14+, and these literals are non-empty.
 private let koaType = UTType(filenameExtension: "koa")!
 private let artType = UTType(filenameExtension: "art")!
+private let prgType = UTType(filenameExtension: "prg")!
 
 // MARK: - Format routing
 
@@ -54,6 +55,25 @@ func exportC64File(model: AppModel) {
     do {
         let data = try C64FileWriter.data(for: converted, format: format)
         try data.write(to: url)
+    } catch {
+        NSAlert(error: error).runModal()
+    }
+}
+
+/// Saves the last-converted picture as a runnable `.prg` — the same
+/// self-displaying program `ViceLauncher` shows, written where the user asks.
+///
+/// Derived from `converted` for the same staleness reason as the C64 export:
+/// the program must display the picture the preview is showing.
+@MainActor
+func exportPRG(model: AppModel) {
+    guard let converted = model.converted else { return }
+    let panel = NSSavePanel()
+    panel.allowedContentTypes = [prgType]
+    panel.nameFieldStringValue = defaultName(model: model, ext: "prg")
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    do {
+        try C64PrgWriter.data(for: converted).write(to: url)
     } catch {
         NSAlert(error: error).runModal()
     }
