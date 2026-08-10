@@ -73,11 +73,8 @@ private struct RootView: View {
     // once an image is loaded — not just the empty state. Dropping a new
     // file over the source view or the preview replaces the current image.
     @ViewBuilder private var sourcePane: some View {
-        if let source = model.sourceImage {
-            Image(decorative: source, scale: 1, orientation: .up)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .padding()
+        if model.sourceImage != nil {
+            CropView(model: model)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(nsColor: .windowBackgroundColor))
                 .dropReceiver(model: model)
