@@ -335,3 +335,25 @@ byte buffers (≈64 K pixels — comfortably fast without SIMD heroics).
 6. App bundle packaging (`scripts/make-app.sh`, document types, Dock drops).
 7. Golden-image polish pass: tune dithering defaults against real photos,
    verify in VICE.
+
+## Amendment 2026-08-10: Show in VICE toolbar button and VICE.app detection
+
+Maintainer request, approved. Two gaps in the shipped **File ▸ Show in
+VICE** (⌘R):
+
+1. **Detection.** `ViceLauncher.findX64sc()` only walks `PATH` plus the two
+   Homebrew bin directories, so the official VICE macOS app distribution —
+   an `/Applications` folder containing `x64sc.app` — is never found, and
+   the command stays permanently disabled on machines with only the app.
+   Detection now asks LaunchServices first
+   (`NSWorkspace.shared.urlForApplication(withBundleIdentifier:
+   "org.viceteam.x64sc")`, binary at `Contents/MacOS/x64sc` inside the
+   returned bundle), with the existing `PATH`/Homebrew walk as fallback.
+   Launch mechanics are unchanged: temp `.prg`, `Process`, autostart.
+2. **Discoverability.** The window toolbar gains a **Show in VICE** button
+   ahead of the Export menu — same action and enablement as the menu item
+   (image converted AND VICE found), with a help tooltip. The File-menu
+   item keeps the ⌘R shortcut.
+
+The missing-VICE error names both install routes (the VICE app download
+and `brew install vice`). Implemented as plan Task 21.
