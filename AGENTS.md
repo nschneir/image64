@@ -54,6 +54,7 @@ swift test                  # full test suite
 swift test --filter C64KitTests   # engine tests only
 swift run image64 --help    # the CLI
 swift run Image64App        # launch the app
+scripts/make-app.sh         # package dist/image64.app (unsigned, local use)
 ```
 
 Keep shell invocations in the plain form above: one command, executable

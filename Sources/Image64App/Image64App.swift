@@ -7,21 +7,25 @@ import C64Kit
 /// The App type is deliberately not named `Image64App`: that is the module's
 /// own name, and shadowing it makes references from later files ambiguous.
 ///
-/// The model lives here — not inside `RootView` — because the File menu
-/// commands are declared on the `Scene` and need to close over the same
-/// `AppModel` instance the window is showing.
+/// The model is reached from here — not from inside `RootView` — because the
+/// File menu commands are declared on the `Scene` and need to close over the
+/// same `AppModel` instance the window is showing.
 @main
 struct Image64AppMain: App {
     // Without an .app bundle, LaunchServices treats the executable as a
     // background helper: no menu bar, no Dock activation, focus stays on the
     // launching terminal. Setting the activation policy to `.regular` before
     // the first window shows fixes both — the app owns its menu bar and comes
-    // to the front on launch, matching how the Task 15 .app bundle will
-    // behave. The delegate is the only reliable place to run this: `App.init`
-    // fires too early on some macOS versions.
+    // to the front on launch, matching how the .app bundle
+    // (`scripts/make-app.sh`) behaves. The delegate is the only reliable place
+    // to run this: `App.init` fires too early on some macOS versions.
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-    @State private var model = AppModel()
+    /// The delegate owns the model rather than a `@State` here, because
+    /// `application(_:open:)` can arrive before this scene has rendered
+    /// anything — see `AppDelegate`. This indirection keeps every call site
+    /// below reading `model`, as they did when it was `@State`.
+    private var model: AppModel { appDelegate.model }
 
     var body: some Scene {
         WindowGroup("image64") {
@@ -197,12 +201,38 @@ private func showInVICE(model: AppModel) {
     }
 }
 
+/// Holds the one `AppModel` and handles the launch-time AppKit callbacks the
+/// SwiftUI `App` type cannot express.
+///
+/// The model lives here, not in a `@State` on the `App`, because AppKit
+/// delivers the open-documents Apple event between
+/// `applicationWillFinishLaunching` and `applicationDidFinishLaunching` — i.e.
+/// before the scene has rendered and before any `onAppear`/`task` could have
+/// handed a scene-owned model over. Owning it means a URL arriving that early
+/// always has somewhere to go; the window then draws whatever state it finds.
+@MainActor
 private final class AppDelegate: NSObject, NSApplicationDelegate {
+    let model = AppModel()
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Where Finder ▸ Open With, a drop on the Dock icon, and `open -a
+    /// image64 file` all land — the routes the `CFBundleDocumentTypes` entry
+    /// in `scripts/make-app.sh` advertises.
+    ///
+    /// The app shows one picture at a time, so the first URL wins and it
+    /// replaces whatever is loaded, exactly as a drag-and-drop onto the window
+    /// does. Loading is `AppModel.load` — the same entry point as every other
+    /// route into the app — so recent documents and error reporting behave
+    /// identically here.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let url = urls.first else { return }
+        model.load(url: url)
     }
 }
