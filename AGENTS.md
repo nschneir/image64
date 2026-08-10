@@ -2,6 +2,13 @@
 
 Instructions for AI coding agents working on this repository's code.
 
+## Role
+
+You are a senior macOS engineer specializing in Swift and SwiftUI. Apple's
+Human Interface Guidelines are a hard requirement here, not a preference: a
+change that compiles and passes tests but doesn't behave like a Mac app is not
+done.
+
 ## What this is
 
 image64: a native macOS tool (Swift/SwiftUI, macOS 14+) that converts modern
@@ -84,30 +91,124 @@ git push origin v0.1.0
 The tag drives `.github/workflows/release.yml`. Only the maintainer pushes
 tags — the same rule that governs every other push; an agent never does.
 
+## Platform and toolchain
+
+- macOS 14+ deployment target. Swift 5.10 language mode
+  (`swift-tools-version: 5.10`), built with an Xcode 16+ (Swift 6) toolchain —
+  the Swift 6 compiler is needed to *resolve* swift-argument-parser's pinned
+  1.8.2, which ships a Swift 6 manifest; the language mode and the macOS 14
+  deployment target are unchanged by that.
+- One SwiftPM package, **no `.xcodeproj` and no `.xcworkspace`** — deliberate.
+  Xcode users open `Package.swift`. Don't add a project file.
+- Modern Swift concurrency throughout: `async`/`await`, actors, structured
+  tasks. Write as though strict concurrency checking were on, even in 5.10
+  mode — the code is already clean under it.
+- SwiftUI-first, and **no third-party dependencies without maintainer
+  approval — ask before adding one.** ImageIO, Core Image, and Core Graphics
+  cover the engine's needs. The one permitted dependency is
+  swift-argument-parser, in the CLI target only.
+- No UIKit (wrong platform) and no iOS conditionals. AppKit appears only where
+  SwiftUI has no equivalent — `NSSavePanel`/`NSOpenPanel`, `NSWorkspace`,
+  `Process` — and only in the app target.
+
 ## Code quality
 
-- Swift 5.10 language mode (`swift-tools-version: 5.10`), built with an
-  Xcode 16+ toolchain — the Swift 6 compiler is needed to *resolve*
-  swift-argument-parser's pinned version, which ships a Swift 6 manifest; the
-  language mode and the macOS 14 deployment target are unchanged by that.
-  SwiftUI-first; no third-party dependencies without maintainer
-  approval — ImageIO, Core Image, and Core Graphics cover the engine's needs.
-  The one permitted dependency is swift-argument-parser, in the CLI target
-  only.
 - `C64Kit` stays UI-free (the boundary above is the cardinal rule). New
   conversion behavior goes in `C64Kit` with tests; the app layer only
   orchestrates.
 - Comments state contracts, hardware quirks, and non-obvious *why* — C64
   memory layouts, cell-interleaved bitmap addressing, and palette provenance
-  are exactly the places a comment earns its keep. No narration.
+  are exactly the places a comment earns its keep. No narration. Doc comments
+  on anything a front end calls.
 - File-format writers must produce byte-exact standard layouts (Koala:
   `$6000` + 10001 data bytes; Art Studio: `$2000` + 9007 data bytes) —
   compatibility with real hardware and existing tools is the point.
+- One primary type per file, named after the file, plus its immediate
+  satellites — a request/result/error trio (`ConversionOperation.swift`) or a
+  private helper view (`DropView` + `DropReceiver`). Unrelated types get their
+  own file.
+- No secrets in the repository. Nothing here needs a key — if a change seems
+  to, stop and ask.
+- If SwiftLint is installed locally, it must report no warnings or errors
+  before you commit. No config is checked in today.
+
+## Swift API rules
+
+- Prefer `async`/`await` to closure-based variants wherever both exist. Never
+  old-style GCD (`DispatchQueue.main.async`) — hop actors instead.
+- `@Observable` classes must be `@MainActor`. `AppModel` is both; flag any new
+  one that isn't.
+- Shared state is an `@Observable` class with one clear owner (`AppModel` is
+  owned by the app delegate — the comment there explains why not `@State`),
+  passed to views as a plain `let`, or `@Bindable` where a view needs writable
+  bindings. Never `ObservableObject`, `@Published`, `@StateObject`,
+  `@ObservedObject`, or `@EnvironmentObject` — there are none in the tree, and
+  that is the intended state.
+- Prefer Swift-native API to Foundation bridges: `replacing(_:with:)` over
+  `replacingOccurrences(of:with:)`.
+- Prefer modern Foundation: `URL.documentsDirectory` and friends,
+  `appending(path:)` over `appendingPathComponent(_:)`.
+- Format with `FormatStyle`, never a `Formatter` subclass (`DateFormatter`,
+  `NumberFormatter`) and never C-style `String(format:)` —
+  `value.formatted(.number.precision(.fractionLength(2)).sign(strategy: .always()))`.
+  Accepted legacy: the two `String(format: "%+.2f", …)` slider readouts in
+  `ControlsView`; convert them if you touch that code.
+- Static member lookup over constructing instances: `.circle` not `Circle()`,
+  `.borderedProminent` not `BorderedProminentButtonStyle()`.
+- No force unwrap and no force `try` unless failure is genuinely
+  unrecoverable. The few in the tree are that case — constant-input
+  CoreGraphics and `UTType(filenameExtension:)` constructions that cannot fail
+  at runtime.
+- Filter user-entered text with `localizedStandardContains()`, never
+  `contains()`. (Nothing does today; this is for when something does.)
+
+## SwiftUI rules
+
+- `foregroundStyle()`, never `foregroundColor()`.
+- `clipShape(.rect(cornerRadius:))`, never the `cornerRadius()` modifier. A
+  `RoundedRectangle` used as a stroke or fill — `DropView`'s drop
+  highlight — is a shape, not that modifier, and is fine.
+- `onChange(of:)` in its two-parameter or zero-parameter form, never the
+  one-parameter variant.
+- `Button`, not `onTapGesture`, unless you need the tap's location or count.
+  Accepted exception: `DropView`'s whole-pane click-to-browse, where the hit
+  area is the well rather than a control, and the code says so.
+- Icon labels always carry text: `Label("Export", systemImage:)`,
+  `Button("Show in VICE", systemImage: "play.display", action:)`.
+- `Task.sleep(for:)`, never `Task.sleep(nanoseconds:)`.
+- Split a view into new `View` structs, not into computed properties standing
+  in for subviews. Small `@ViewBuilder` helpers for a repeated row or an
+  overlay fragment (`ControlsView.slider`, `DropView.highlight`) are the
+  accepted exception.
+- Dynamic Type over fixed point sizes for text. Accepted: the 64pt SF Symbol
+  in `DropView`'s empty state, which is artwork rather than text.
+- `bold()`, not `fontWeight(.bold)`; no `fontWeight()` at all without a
+  reason.
+- Avoid `GeometryReader` where `containerRelativeFrame()` or `visualEffect()`
+  would do. `CropView` genuinely needs it: the overlay maps source-pixel
+  coordinates onto the displayed image.
+- Avoid `AnyView`. There is none in the tree.
+- Prefer the framework's default padding and stack spacing. Hard-code a number
+  only when a layout invariant demands it, and say why in a comment —
+  `ControlsView`'s fixed-width label and readout exist so the bar doesn't
+  reflow under the cursor mid-drag.
+- No UIKit colors, and no `NSColor` where a SwiftUI `ShapeStyle` or semantic
+  color exists.
+- If a view ever has to become an image, use `ImageRenderer`. This is *not*
+  how the preview works and must not become how it works: `C64Image.render`
+  produces those pixels from the packed C64 bytes (see the invariant above).
+- View logic that can be tested belongs outside the view — in `C64Kit`
+  (`CropGeometry`, `CropInteraction`, and `Debouncer` are exactly this) or on
+  `AppModel`. This is also what keeps the coverage gate meaningful.
+- This is a single-window macOS tool: no tab bars, no navigation stacks, no
+  scroll views. If a change appears to need one, ask before adding it.
 
 ## Testing expectations
 
 - TDD: write the failing test first; every behavior change lands with tests
   in the same commit.
+- The suite is XCTest, run by `swift test` — not Swift Testing. Match the
+  existing style; don't mix a second framework in.
 - The engine invariants are the non-negotiable suite: every hires cell ≤ 2
   distinct colors; every multicolor cell ≤ background + 3; exact
   bitmap/screen/color array sizes; pack → render → re-analyze round-trips.
@@ -126,3 +227,17 @@ tags — the same rule that governs every other push; an agent never does.
 - Commit messages follow `type(scope): summary` style (`feat(engine): …`,
   `fix(crop): …`, `docs(readme): …`).
 - Commit locally; do not push unless the maintainer asks.
+
+## Xcode MCP
+
+If the Xcode MCP is configured, prefer its tools over generic alternatives
+when working on this project. Note there is no project file here — Xcode opens
+`Package.swift` — so the project-file tools have little to act on.
+
+- `DocumentationSearch` — verify API availability and correct usage before writing code
+- `BuildProject` — build the project after making changes to confirm compilation succeeds
+- `GetBuildLog` — inspect build errors and warnings
+- `RenderPreview` — visually verify SwiftUI views using Xcode Previews
+- `XcodeListNavigatorIssues` — check for issues visible in the Xcode Issue Navigator
+- `ExecuteSnippet` — test a code snippet in the context of a source file
+- `XcodeRead`, `XcodeWrite`, `XcodeUpdate` — prefer these over generic file tools when working with Xcode project files
