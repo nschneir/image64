@@ -140,12 +140,25 @@ private struct RootView: View {
         // without the sliders collapsing.
         .frame(minWidth: 980, minHeight: 560)
         .navigationTitle(model.sourceURL?.lastPathComponent ?? "image64")
-        // Exactly one toolbar item. The mode picker used to sit here in
-        // `.navigation` placement; a settings control in the unified title bar
-        // reads as clutter and is not what that area is for, so it moved into
-        // the controls bar. A single trailing action button is the standard
-        // macOS title-bar shape.
+        // Two toolbar items, both actions: Show in VICE and the export menu in
+        // `.primaryAction` placement, which macOS lays out last (trailing). The
+        // mode picker used to sit here in `.navigation` placement; a settings
+        // control in the unified title bar reads as clutter and is not what
+        // that area is for, so it moved into the controls bar. What is left is
+        // the standard macOS title-bar shape: a short run of trailing actions
+        // on the same thing the window is showing, with the primary one last.
         .toolbar {
+            // Same helper the File ▸ Show in VICE command calls, and the same
+            // enablement rule — a converted picture plus a VICE we can find.
+            ToolbarItem {
+                Button {
+                    showInVICE(model: model)
+                } label: {
+                    Label("Show in VICE", systemImage: "play.display")
+                }
+                .help("Run the converted picture in the VICE emulator")
+                .disabled(model.converted == nil || ViceLauncher.findX64sc() == nil)
+            }
             ToolbarItem(placement: .primaryAction) {
                 ExportMenu(model: model)
                     .help("Export the converted picture as a C64 file")

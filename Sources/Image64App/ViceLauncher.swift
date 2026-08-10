@@ -1,3 +1,4 @@
+import AppKit
 import C64Kit
 import Foundation
 
@@ -11,10 +12,26 @@ enum ViceLauncher {
 
     /// Where `x64sc` lives, or `nil` if VICE is not installed.
     ///
-    /// The `PATH` walk covers a shell-installed VICE; the two fixed entries
-    /// cover the app-bundle case, where the process inherits the launchd
-    /// default `PATH` that omits Homebrew's directories.
+    /// Three routes, in the order a Mac user is most likely to have installed
+    /// VICE: the official macOS app distribution first, then a shell-installed
+    /// `x64sc` on `PATH`, then the two fixed Homebrew directories — which cover
+    /// the app-bundle case, where the process inherits the launchd default
+    /// `PATH` that omits them.
     static func findX64sc() -> URL? {
+        // The VICE macOS app distribution registers x64sc.app with
+        // LaunchServices; prefer it over a shell install so the app works
+        // without Homebrew (maintainer's machines carry only the app).
+        // LaunchServices finds the bundle wherever the user dragged it,
+        // whatever the enclosing folder is named — the official download
+        // unpacks into a space-bearing folder, so no fixed path would do.
+        if let bundle = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: "org.viceteam.x64sc") {
+            let binary = bundle.appendingPathComponent("Contents/MacOS/x64sc")
+            if FileManager.default.isExecutableFile(atPath: binary.path) {
+                return binary
+            }
+        }
+
         var candidates = (ProcessInfo.processInfo.environment["PATH"] ?? "")
             .split(separator: ":")
             .map { String($0) }
@@ -39,8 +56,12 @@ enum ViceLauncher {
     static func show(_ image: C64Image, title: String) throws {
         guard let x64sc = findX64sc() else {
             throw CocoaError(.fileNoSuchFile, userInfo: [
+                // Both install routes named, app first: the app is what most
+                // Mac users have, and a Homebrew-only hint reads as "you need
+                // Homebrew" to someone who does not have it.
                 NSLocalizedDescriptionKey:
-                    "VICE is not installed — `brew install vice` provides x64sc."
+                    "VICE is not installed — download the VICE app from "
+                    + "vice-emu.sourceforge.io or `brew install vice`."
             ])
         }
 
