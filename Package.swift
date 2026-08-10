@@ -31,7 +31,14 @@ let package = Package(
         // *same* images the engine tests measure, or a lockstep failure could
         // hide behind differently-drawn inputs.
         .target(name: "TestSupport", dependencies: ["C64Kit"], path: "Tests/TestSupport"),
-        .testTarget(name: "C64KitTests", dependencies: ["C64Kit", "TestSupport"]),
+        .testTarget(
+            name: "C64KitTests",
+            dependencies: ["C64Kit", "TestSupport"],
+            // Golden fixtures — small binary files copied into the test bundle so
+            // the golden tests read the exact bytes committed to the repo, not
+            // whatever the pipeline happens to produce today.
+            resources: [.copy("Fixtures")]
+        ),
         // Depends on the executable so `swift test` is guaranteed to have built
         // the binary these tests spawn, and on `C64Kit` for the lockstep test
         // that calls `ConversionOperation.run` directly and compares bytes.
