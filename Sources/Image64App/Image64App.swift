@@ -28,8 +28,39 @@ struct Image64AppMain: App {
             RootView(model: model)
         }
         .commands {
+            // Without an .app bundle there is no Info.plist for the standard
+            // About panel to read, so it falls back to the executable's
+            // generic folder-ish icon and an empty name — which is what the
+            // maintainer was looking at. Supplying the options dictionary
+            // fixes the name, version, and credits today; the icon stays
+            // generic until Task 15 wraps the binary in a bundle with a real
+            // one, because the panel takes its icon from `NSApp.applicationIconImage`
+            // and there is nothing to point that at yet.
+            CommandGroup(replacing: .appInfo) {
+                Button("About image64") {
+                    let credits = NSAttributedString(
+                        string: """
+                            Converts modern images into Commodore 64 bitmap-mode pictures.
+                            MIT license.
+                            """,
+                        attributes: [
+                            .font: NSFont.systemFont(
+                                ofSize: NSFont.smallSystemFontSize)
+                        ])
+                    NSApplication.shared.orderFrontStandardAboutPanel(
+                        options: [
+                            .applicationName: "image64",
+                            .applicationVersion: "0.1.0",
+                            // The panel prints "Version <applicationVersion>
+                            // (<version>)" and shows a bare "()" if the build
+                            // number is absent rather than empty.
+                            .version: "",
+                            .credits: credits,
+                        ])
+                }
+            }
             CommandGroup(replacing: .newItem) {
-                Button("Open…") { openImage(model: model) }
+                Button("Open…") { openImagePanel(model: model) }
                     .keyboardShortcut("o", modifiers: .command)
             }
             CommandGroup(after: .newItem) {
@@ -52,16 +83,15 @@ struct Image64AppMain: App {
                     }
                 }
             }
-            // Menu-bar commands first — the toolbar `ExportMenu` duplicates
-            // these buttons for one-click access, but if a keyboard shortcut
-            // ever lands ambiguously between the two the File menu items are
-            // the source of truth.
+            // Menu-bar command first — the toolbar `ExportMenu` duplicates
+            // this button for one-click access, but if a keyboard shortcut
+            // ever lands ambiguously between the two the File menu item is
+            // the source of truth. PNG export used to live here on ⇧⌘E; it
+            // is a verification aid for checking the converter's output, so
+            // it now belongs to the CLI only.
             CommandGroup(after: .saveItem) {
                 Button("Export C64 File…") { exportC64File(model: model) }
                     .keyboardShortcut("e", modifiers: .command)
-                    .disabled(model.converted == nil)
-                Button("Export PNG…") { exportPNG(model: model) }
-                    .keyboardShortcut("e", modifiers: [.command, .shift])
                     .disabled(model.converted == nil)
             }
         }
@@ -72,43 +102,48 @@ private struct RootView: View {
     let model: AppModel
 
     var body: some View {
-        // Local `@Bindable` shadow: the property is declared `let model:
-        // AppModel` because `RootView` does not own the observable, but the
-        // toolbar picker needs a two-way binding (`$model.settings.mode`).
-        // On macOS 14 this is the idiomatic way to derive bindings from a
-        // passed-in `@Observable` reference without changing the property
-        // declaration or the call site.
-        @Bindable var model = model
-        HSplitView {
-            sourcePane
-            PreviewView(model: model)
-                .dropReceiver(model: model)
-        }
-        .frame(minWidth: 900, minHeight: 500)
-        .navigationTitle(model.sourceURL?.lastPathComponent ?? "image64")
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Picker("Mode", selection: $model.settings.mode) {
-                    Text("Hires").tag(BitmapMode.hires)
-                    Text("Multicolor").tag(BitmapMode.multicolor)
-                }
-                .pickerStyle(.segmented)
-                .accessibilityLabel("Bitmap mode")
+        // The controls bar used to be a `.safeAreaInset(edge: .bottom)`, which
+        // hangs the bar *over* the content and only insets the safe area —
+        // `HSplitView` does not honor that inset for its own children, so the
+        // bar sat on top of the bottom of both panes. An explicit `VStack`
+        // makes the split view and the bar siblings that divide the window
+        // between them, so overlap is structurally impossible.
+        VStack(spacing: 0) {
+            HSplitView {
+                sourcePane
+                PreviewView(model: model)
+                    .frame(
+                        minWidth: 340, maxWidth: .infinity,
+                        maxHeight: .infinity)
+                    .dropReceiver(model: model)
             }
+            Divider()
+            ControlsView(model: model)
+        }
+        // Taller and wider than before: the controls bar now takes real
+        // vertical space instead of floating over the panes, and at
+        // `.controlSize(.regular)` its row needs the extra width to lay out
+        // without the sliders collapsing.
+        .frame(minWidth: 980, minHeight: 560)
+        .navigationTitle(model.sourceURL?.lastPathComponent ?? "image64")
+        // Exactly one toolbar item. The mode picker used to sit here in
+        // `.navigation` placement; a settings control in the unified title bar
+        // reads as clutter and is not what that area is for, so it moved into
+        // the controls bar. A single trailing action button is the standard
+        // macOS title-bar shape.
+        .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 ExportMenu(model: model)
+                    .help("Export the converted picture as a C64 file")
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            ControlsView(model: model)
         }
         // Centralized settings observer: one `.onChange` on the whole
         // `ConversionSettings` value replaces per-control `.onChange` in
-        // every ControlsView slider/picker AND catches the toolbar mode
-        // picker and the Reset button in one place. `ConversionSettings`
-        // is `Equatable`, so the comparison is O(1) for the small value
-        // type it is, and correctness is guaranteed for bulk mutations
-        // like Reset that would otherwise fire N separate observers.
+        // every ControlsView slider/picker AND catches the Reset button in
+        // one place. `ConversionSettings` is `Equatable`, so the comparison
+        // is O(1) for the small value type it is, and correctness is
+        // guaranteed for bulk mutations like Reset that would otherwise fire
+        // N separate observers.
         .onChange(of: model.settings) { _, _ in
             model.scheduleConvert()
         }
@@ -117,15 +152,26 @@ private struct RootView: View {
     // Both panes carry `.dropReceiver` so the entire window accepts a drop
     // once an image is loaded — not just the empty state. Dropping a new
     // file over the source view or the preview replaces the current image.
+    //
+    // The explicit `minWidth`/`maxWidth` and `.layoutPriority(1)` fix the
+    // source pane collapsing to a sliver as soon as a conversion landed:
+    // `HSplitView` divides its initial space by each child's ideal size, and
+    // `CropView`'s `GeometryReader` reports no ideal width at all, so the
+    // preview's image took everything. Giving both panes the same flexible
+    // frame — and the source pane a higher layout priority so it is served
+    // first — makes the initial division even and keeps the divider draggable.
     @ViewBuilder private var sourcePane: some View {
-        if model.sourceImage != nil {
-            CropView(model: model)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(nsColor: .windowBackgroundColor))
-                .dropReceiver(model: model)
-        } else {
-            DropView(model: model)
+        Group {
+            if model.sourceImage != nil {
+                CropView(model: model)
+                    .background(Color(nsColor: .windowBackgroundColor))
+                    .dropReceiver(model: model)
+            } else {
+                DropView(model: model)
+            }
         }
+        .frame(minWidth: 340, maxWidth: .infinity, maxHeight: .infinity)
+        .layoutPriority(1)
     }
 }
 
@@ -136,17 +182,5 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.activate(ignoringOtherApps: true)
-    }
-}
-
-@MainActor
-private func openImage(model: AppModel) {
-    let panel = NSOpenPanel()
-    panel.canChooseFiles = true
-    panel.canChooseDirectories = false
-    panel.allowsMultipleSelection = false
-    panel.allowedContentTypes = [.image]
-    if panel.runModal() == .OK, let url = panel.url {
-        model.load(url: url)
     }
 }

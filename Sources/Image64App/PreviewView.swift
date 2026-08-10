@@ -33,12 +33,23 @@ struct PreviewView: View {
                 // future preview at a different render size (or a
                 // multicolor-native 320×200 buffer) still lands in the
                 // right shape without extra plumbing.
+                //
+                // The frame pins `idealWidth`/`idealHeight` to zero as well as
+                // the maxima. A `.resizable()` Image still reports its pixel
+                // size as its ideal size, and the 640×400 preview buffer was
+                // therefore claiming 640 points of ideal width — which is what
+                // let this pane squeeze the source pane down to a sliver when
+                // `HSplitView` divided the window by ideal size on the first
+                // layout after a conversion landed. With an ideal of zero the
+                // pane asks for nothing and the split is decided by the two
+                // panes' equal minimum widths instead.
                 Image(decorative: cgImage, scale: 1, orientation: .up)
                     .interpolation(.none)
                     .resizable()
                     .aspectRatio(8.0 / 5.0, contentMode: .fit)
                     .frame(
-                        maxWidth: .infinity, maxHeight: .infinity,
+                        minWidth: 0, idealWidth: 0, maxWidth: .infinity,
+                        minHeight: 0, idealHeight: 0, maxHeight: .infinity,
                         alignment: .center)
             } else if !model.isConverting {
                 // Brief in-between state: an image has been loaded but the

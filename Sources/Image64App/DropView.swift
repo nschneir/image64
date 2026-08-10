@@ -4,6 +4,26 @@ import Observation
 import SwiftUI
 import UniformTypeIdentifiers
 
+// MARK: - Open panel
+
+/// Presents the standard open panel and hands the chosen file to the model.
+///
+/// This lives beside `DropView` rather than in `Image64App.swift` because the
+/// empty state is now the primary place a user reaches for it — the File ▸
+/// Open… command calls the same function, so both routes share one panel
+/// configuration instead of drifting apart.
+@MainActor
+func openImagePanel(model: AppModel) {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = true
+    panel.canChooseDirectories = false
+    panel.allowsMultipleSelection = false
+    panel.allowedContentTypes = [.image]
+    if panel.runModal() == .OK, let url = panel.url {
+        model.load(url: url)
+    }
+}
+
 // MARK: - Empty state
 
 /// What the window shows before any image is loaded: an icon, a prompt, and
@@ -19,7 +39,9 @@ struct DropView: View {
                 .font(.system(size: 64))
                 .foregroundStyle(.secondary)
 
-            Text("Drop or paste an image")
+            // Says "click" out loud because the affordance is invisible
+            // otherwise — there is no button here, just a well.
+            Text("Drop or paste an image, or click to browse")
                 .font(.title2)
                 .foregroundStyle(.secondary)
 
@@ -34,7 +56,14 @@ struct DropView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // `.contentShape` before the tap gesture so the hit area is the whole
+        // pane, not just the glyph and the two lines of text: clicking an
+        // empty drop target to get a file browser is the standard macOS
+        // affordance (Xcode's asset well, Safari's downloads shelf), and it
+        // only reads as one if the entire well is clickable.
         .contentShape(Rectangle())
+        .onTapGesture { openImagePanel(model: model) }
+        .help("Click to choose an image, or drop one here")
         .dropReceiver(model: model)
     }
 }

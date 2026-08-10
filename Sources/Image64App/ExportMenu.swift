@@ -59,51 +59,32 @@ func exportC64File(model: AppModel) {
     }
 }
 
-/// Saves a 640×400 PNG of the last-converted picture.
-///
-/// The image is rendered through `ConversionOperation.previewImage`, the same
-/// entry point the preview view uses, so the PNG is byte-for-byte the pixels
-/// the user just saw on screen. Rendering a fresh CGImage from `converted`
-/// via a different path would risk drift between "what I see" and "what I get".
-@MainActor
-func exportPNG(model: AppModel) {
-    guard let converted = model.converted else { return }
-    let panel = NSSavePanel()
-    panel.allowedContentTypes = [.png]
-    panel.nameFieldStringValue = defaultName(model: model, ext: "png")
-    guard panel.runModal() == .OK, let url = panel.url else { return }
-    do {
-        let image = ConversionOperation.previewImage(for: converted, palette: model.settings.palette)
-        try ImageLoading.writePNG(image, to: url)
-    } catch {
-        NSAlert(error: error).runModal()
-    }
-}
+// MARK: - Toolbar button
 
-// MARK: - Toolbar menu
-
-/// Toolbar dropdown that mirrors the File menu's Export items.
+/// The single toolbar action: export the converted picture as a C64 file.
 ///
-/// No `.keyboardShortcut` is attached here on purpose: the shortcuts for both
-/// export actions are declared once in the File menu wiring in
-/// `Image64App.swift`, which is the single source of truth. Duplicating them
-/// on the toolbar buttons causes SwiftUI to warn about conflicting shortcut
-/// registrations and would tie the shortcut to whichever view happens to be
-/// realized.
+/// This was a `Menu` with a second "Export PNG…" item. PNG export is a
+/// verification aid — useful when eyeballing the converter's output against a
+/// reference, not something the app's audience wants — so it now lives only in
+/// the CLI. With one item left, a dropdown is strictly worse than a button:
+/// it costs an extra click and hides the only thing it can do. Hence a plain
+/// toolbar `Button`.
+///
+/// The type keeps the name `ExportMenu` because `Image64App.swift` refers to
+/// it, and no `.keyboardShortcut` is attached here on purpose: ⌘E is declared
+/// once in the File menu wiring, which is the single source of truth.
+/// Duplicating it on the toolbar button makes SwiftUI warn about conflicting
+/// shortcut registrations and ties the shortcut to whichever view happens to
+/// be realized.
 struct ExportMenu: View {
     let model: AppModel
 
     var body: some View {
-        Menu {
-            Button("Export C64 File…") { exportC64File(model: model) }
-                .disabled(model.converted == nil)
-            Button("Export PNG…") { exportPNG(model: model) }
-                .disabled(model.converted == nil)
+        Button {
+            exportC64File(model: model)
         } label: {
             Label("Export", systemImage: "square.and.arrow.up")
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
         .disabled(model.converted == nil)
     }
 }
