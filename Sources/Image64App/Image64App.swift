@@ -52,6 +52,18 @@ struct Image64AppMain: App {
                     }
                 }
             }
+            // Menu-bar commands first — the toolbar `ExportMenu` duplicates
+            // these buttons for one-click access, but if a keyboard shortcut
+            // ever lands ambiguously between the two the File menu items are
+            // the source of truth.
+            CommandGroup(after: .saveItem) {
+                Button("Export C64 File…") { exportC64File(model: model) }
+                    .keyboardShortcut("e", modifiers: .command)
+                    .disabled(model.converted == nil)
+                Button("Export PNG…") { exportPNG(model: model) }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+                    .disabled(model.converted == nil)
+            }
         }
     }
 }
@@ -60,6 +72,13 @@ private struct RootView: View {
     let model: AppModel
 
     var body: some View {
+        // Local `@Bindable` shadow: the property is declared `let model:
+        // AppModel` because `RootView` does not own the observable, but the
+        // toolbar picker needs a two-way binding (`$model.settings.mode`).
+        // On macOS 14 this is the idiomatic way to derive bindings from a
+        // passed-in `@Observable` reference without changing the property
+        // declaration or the call site.
+        @Bindable var model = model
         HSplitView {
             sourcePane
             PreviewView(model: model)
@@ -67,6 +86,32 @@ private struct RootView: View {
         }
         .frame(minWidth: 900, minHeight: 500)
         .navigationTitle(model.sourceURL?.lastPathComponent ?? "image64")
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Picker("Mode", selection: $model.settings.mode) {
+                    Text("Hires").tag(BitmapMode.hires)
+                    Text("Multicolor").tag(BitmapMode.multicolor)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityLabel("Bitmap mode")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                ExportMenu(model: model)
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            ControlsView(model: model)
+        }
+        // Centralized settings observer: one `.onChange` on the whole
+        // `ConversionSettings` value replaces per-control `.onChange` in
+        // every ControlsView slider/picker AND catches the toolbar mode
+        // picker and the Reset button in one place. `ConversionSettings`
+        // is `Equatable`, so the comparison is O(1) for the small value
+        // type it is, and correctness is guaranteed for bulk mutations
+        // like Reset that would otherwise fire N separate observers.
+        .onChange(of: model.settings) { _, _ in
+            model.scheduleConvert()
+        }
     }
 
     // Both panes carry `.dropReceiver` so the entire window accepts a drop

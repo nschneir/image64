@@ -53,8 +53,8 @@ toolset; exported images drop straight into that workflow.
 
 ## Status
 
-**In development.** The design and implementation plan are complete; the
-code is being built task-by-task, tests first. No releases yet.
+**Alpha.** The engine, CLI, and app are implemented; expect rough edges.
+Build from source (below) — no packaged releases yet.
 
 ## Building
 

@@ -253,7 +253,7 @@ Given the cropped `CGImage` and settings:
    then read back as an sRGB byte buffer.
 3. **Quantize + dither** every pixel to the 16-color C64 palette. Nearest
    color is chosen by weighted-RGB distance (perceptual weights 0.299/0.587/
-   0.114 on linearized values — cheap and good enough for a 16-color target).
+   0.114 on sRGB byte values — cheap and good enough for a 16-color target).
    Floyd–Steinberg diffuses quantization error serpentine-scan; Bayer applies
    a 4×4 threshold matrix before nearest-color lookup; None is plain nearest.
 4. **Enforce cell constraints** (the C64-specific step):
