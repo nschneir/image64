@@ -468,6 +468,58 @@ final class ImageLoadingTests: XCTestCase {
         }
     }
 
+    /// A missing directory is the typo; a name already taken by a *folder* is
+    /// what a batch loop hits. Both have to arrive as `unwritable`, because the
+    /// front ends have exactly one "could not write ‘…’" sentence for the whole
+    /// family and an error of any other type would reach the user as a Cocoa
+    /// description instead.
+    func testWritingOntoADirectoryThrowsUnwritable() throws {
+        let image = try smallImage(named: "magenta.png")
+
+        let occupied = url("occupied.png")
+        try FileManager.default.createDirectory(at: occupied, withIntermediateDirectories: true)
+
+        XCTAssertThrowsError(try ImageLoading.writePNG(image, to: occupied)) { error in
+            XCTAssertEqual(error as? ImageLoadingError, .unwritable(occupied))
+        }
+        // And it is still a directory — a failed write must not have replaced it
+        // with a half-encoded file.
+        var isDirectory: ObjCBool = false
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: occupied.path, isDirectory: &isDirectory))
+        XCTAssertTrue(isDirectory.boolValue)
+    }
+
+    /// The permission case: the folder exists and can be listed, but nothing may
+    /// be created in it — the shape of "your output directory is read-only",
+    /// which must be the same `unwritable` and must leave no file behind.
+    func testWritingIntoAReadOnlyDirectoryThrowsUnwritable() throws {
+        // Root ignores the permission bits, so there would be nothing to assert.
+        try XCTSkipIf(getuid() == 0, "the permission bits do not apply to root")
+        let image = try smallImage(named: "magenta.png")
+
+        let readOnly = url("read-only")
+        try FileManager.default.createDirectory(at: readOnly, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o500], ofItemAtPath: readOnly.path)
+        let blocked = readOnly.appendingPathComponent("out.png")
+
+        XCTAssertThrowsError(try ImageLoading.writePNG(image, to: blocked)) { error in
+            XCTAssertEqual(error as? ImageLoadingError, .unwritable(blocked))
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: blocked.path))
+    }
+
+    /// An 8×8 flat-magenta image on disk, loaded back — the smallest thing the
+    /// PNG writer will accept, for tests that care only about the destination.
+    private func smallImage(named name: String) throws -> CGImage {
+        let file = url(name)
+        let magenta = RGB(r: 255, g: 0, b: 255)
+        TestImageFactory.makePNG(
+            width: 8, height: 8, horizontalGradient: magenta, to: magenta, at: file)
+        return try ImageLoading.loadCGImage(from: file)
+    }
+
     // MARK: - (e) Nearest-neighbour output
 
     func testCGImageFromBufferScalesByPixelReplication() throws {

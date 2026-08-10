@@ -337,6 +337,78 @@ final class CLIEndToEndTests: XCTestCase {
             "the message should name the offending option: \(run.standardError)")
     }
 
+    /// `--crop` is checked for *shape* before an image is opened, so a value
+    /// that is not four whole numbers has to fail on the argument alone — and
+    /// say what it wanted, since "x,y,w,h" is the whole trick to the flag.
+    func testAMalformedCropIsRejectedBeforeAnythingIsWritten() throws {
+        let source = makeSource()
+        let output = url("out.koa")
+
+        let run = try runCLI([
+            "convert", source.path, "-o", output.path, "--crop", "8,16,wide,999",
+        ])
+
+        XCTAssertEqual(run.status, 1)
+        XCTAssertTrue(
+            run.standardError.contains("x,y,w,h"),
+            "the message should show the expected shape: \(run.standardError)")
+        XCTAssertTrue(
+            run.standardError.contains("8,16,wide,999"),
+            "the message should quote back what was given: \(run.standardError)")
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: output.path),
+            "a rejected crop must not leave a file behind")
+    }
+
+    /// Three numbers where four are wanted: the count check and the per-field
+    /// parse are separate guards behind the same message, and a batch script
+    /// that dropped a field must not fall through to the default crop.
+    func testACropWithTooFewNumbersIsRejected() throws {
+        let source = makeSource()
+
+        let run = try runCLI([
+            "convert", source.path, "-o", url("out.koa").path, "--crop", "8,16,400",
+        ])
+
+        XCTAssertEqual(run.status, 1)
+        XCTAssertTrue(
+            run.standardError.contains("x,y,w,h"),
+            "the message should show the expected shape: \(run.standardError)")
+    }
+
+    /// The file-system failure, worded for someone who mistyped a directory.
+    /// The engine collapses every write failure to one error, so this is the
+    /// only place the path and the advice appear.
+    func testAnUnwritableOutputDirectoryIsReported() throws {
+        let source = makeSource()
+        let output = url("no-such-directory/out.koa")
+
+        let run = try runCLI(["convert", source.path, "-o", output.path])
+
+        XCTAssertEqual(run.status, 1)
+        XCTAssertTrue(
+            run.standardError.contains("could not write"),
+            "the message should say writing failed: \(run.standardError)")
+        XCTAssertTrue(
+            run.standardError.contains(output.path),
+            "the message should name the path: \(run.standardError)")
+    }
+
+    func testAnUnwritablePRGDestinationIsReported() throws {
+        let source = makeSource()
+        let prg = url("no-such-directory/out.prg")
+
+        let run = try runCLI(["convert", source.path, "--prg", prg.path])
+
+        XCTAssertEqual(run.status, 1)
+        XCTAssertTrue(
+            run.standardError.contains("could not write"),
+            "the message should say writing failed: \(run.standardError)")
+        XCTAssertTrue(
+            run.standardError.contains(prg.path),
+            "the message should name the path: \(run.standardError)")
+    }
+
     func testAnUnreadableInputIsRejected() throws {
         let run = try runCLI([
             "convert", url("missing.png").path, "-o", url("out.koa").path,
@@ -436,5 +508,93 @@ final class CLIEndToEndTests: XCTestCase {
         XCTAssertTrue(
             run.standardOutput.lowercased().contains("overwrit"),
             "convert --help should state that outputs are overwritten")
+    }
+
+    // MARK: - The human-readable output
+    //
+    // `--json` has a schema test above; the default output is for a person
+    // reading a terminal, and what it owes them is the same facts.
+
+    func testTheDefaultOutputSummarisesTheConversionOnOneLine() throws {
+        let source = makeSource()
+        let output = url("out.koa")
+
+        let run = try runCLI(["convert", source.path, "-o", output.path])
+        XCTAssertEqual(run.status, 0, run.standardError)
+
+        let summary = run.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertEqual(
+            summary.filter { $0 == "\n" }.count, 0, "the summary is one line: \(summary)")
+        XCTAssertTrue(summary.contains(output.path), "it names the file written: \(summary)")
+        XCTAssertTrue(summary.contains("multicolor"), "it names the mode: \(summary)")
+        XCTAssertTrue(summary.contains("colodore palette"), "it names the palette: \(summary)")
+        XCTAssertTrue(summary.contains("fs dither"), "it names the dither: \(summary)")
+        // The crop that was sampled, in the same shape `--crop` accepts.
+        XCTAssertTrue(summary.contains("crop 640×400 at (0, 0)"), "it names the crop: \(summary)")
+    }
+
+    func testTheSummaryListsEveryFileWritten() throws {
+        let source = makeSource()
+        let koala = url("out.koa")
+        let png = url("out.png")
+        let prg = url("out.prg")
+
+        let run = try runCLI([
+            "convert", source.path, "-o", koala.path, "--png", png.path, "--prg", prg.path,
+        ])
+        XCTAssertEqual(run.status, 0, run.standardError)
+
+        for written in [koala, png, prg] {
+            XCTAssertTrue(
+                run.standardOutput.contains(written.path),
+                "the summary should name \(written.lastPathComponent): \(run.standardOutput)")
+        }
+    }
+
+    // MARK: - The root command
+
+    /// The root command exists to hold subcommands, so the one thing its help
+    /// has to do is name them.
+    func testRootHelpNamesTheConvertSubcommand() throws {
+        let run = try runCLI(["--help"])
+
+        XCTAssertEqual(run.status, 0, run.standardError)
+        XCTAssertTrue(
+            run.standardOutput.contains("convert"),
+            "image64 --help should list the convert subcommand: \(run.standardOutput)")
+        XCTAssertTrue(run.standardError.isEmpty, "help is not an error")
+    }
+
+    /// Bare `image64` is a help request, not a failure: there is nothing to do
+    /// and nothing went wrong, so the help goes to standard output and the exit
+    /// code stays 0. That is the branch in `Image64Main.exit(reporting:)` that
+    /// keeps ArgumentParser's clean exits clean.
+    func testBareInvocationPrintsHelpAndSucceeds() throws {
+        let run = try runCLI([])
+
+        XCTAssertEqual(run.status, 0, run.standardError)
+        XCTAssertTrue(
+            run.standardOutput.contains("SUBCOMMANDS"),
+            "a bare invocation should print the help: \(run.standardOutput)")
+        XCTAssertTrue(run.standardError.isEmpty, "a help request is not an error")
+    }
+
+    /// The documented exit-code contract: *every* failure is 1, including the
+    /// usage errors ArgumentParser would otherwise exit 64 for. A script that
+    /// branches on success must not have to know the difference.
+    func testAUsageErrorAlsoExitsOne() throws {
+        let source = makeSource()
+
+        let run = try runCLI([
+            "convert", source.path, "-o", url("out.koa").path, "--bogus",
+        ])
+
+        XCTAssertEqual(run.status, 1, "a usage error is a failure like any other, not 64")
+        XCTAssertTrue(
+            run.standardError.contains("bogus"),
+            "the message should name the unknown option: \(run.standardError)")
+        XCTAssertTrue(
+            run.standardError.contains("Usage:"),
+            "a usage error should print the usage line: \(run.standardError)")
     }
 }

@@ -102,6 +102,39 @@ final class CropInteractionTests: XCTestCase {
         XCTAssertEqual(result.height, 175, "height is width·5/8")
     }
 
+    func testTopEdgeDragIsDrivenByTheVerticalDeltaAboutTheBottomAnchor() {
+        // A vertical-edge drag is the ratio read backwards: the pointer moves
+        // the *height* by `delta.height` and the width follows as h·8/5, with
+        // the bottom edge as the anchor. `delta.width` is deliberately loud
+        // here (999) and must be ignored, or a top-edge drag would pull the
+        // crop off-shape on the diagonal.
+        let start = CGRect(x: 100, y: 60, width: 200, height: 125)
+        let bounds = CGSize(width: 400, height: 300)
+        // The anchored edge: 60 + 125.
+        let bottom: CGFloat = 185
+
+        // Pulled up by 25: height 125 + 25 = 150, so width = 150·8/5 = 240
+        // (already on the 8-grid), and the origin follows from the anchor —
+        // y = 185 − 150 = 35.
+        let grown = CropInteraction.drag(
+            start, handle: .top, by: CGSize(width: 999, height: -25),
+            in: bounds, minWidth: 8)
+        XCTAssertEqual(
+            grown, CGRect(x: 100, y: 35, width: 240, height: 150),
+            "an upward top-edge drag grows about the bottom-left anchor")
+        XCTAssertEqual(grown.maxY, bottom, "the bottom edge is the anchor and must not move")
+
+        // Pushed down by 40: height 125 − 40 = 85, width = 85·8/5 = 136, and
+        // y = 185 − 85 = 100.
+        let shrunk = CropInteraction.drag(
+            start, handle: .top, by: CGSize(width: -999, height: 40),
+            in: bounds, minWidth: 8)
+        XCTAssertEqual(
+            shrunk, CGRect(x: 100, y: 100, width: 136, height: 85),
+            "a downward top-edge drag shrinks about the same anchor")
+        XCTAssertEqual(shrunk.maxY, bottom, "the bottom edge is the anchor and must not move")
+    }
+
     // MARK: - Corner drag
 
     /// One row of the corner-anchor table.

@@ -52,6 +52,7 @@ exactly what exports. Preserve that invariant in any change to the pipeline.
 swift build                 # build everything (engine, CLI, app)
 swift test                  # full test suite
 swift test --filter C64KitTests   # engine tests only
+scripts/coverage.sh         # the coverage gate (see Testing expectations)
 swift run image64 --help    # the CLI
 swift run Image64App        # launch the app
 scripts/make-app.sh         # package dist/image64.app (unsigned, local use)
@@ -104,6 +105,9 @@ tags — the same rule that governs every other push; an agent never does.
   `.art` bytes live under a `Fixtures/` directory (gitignore excepts them).
   Regenerate goldens only when a pipeline change is *intended* to alter
   output, and say so in the commit message.
+- `scripts/coverage.sh` must report ≥95% line coverage over C64Kit +
+  Image64CLI before merge; Image64App is excluded because SwiftUI view bodies
+  don't execute under XCTest — app logic that can be tested lives in C64Kit.
 - Acceptance check for format changes: load an exported file in VICE (the
   neighboring Project64 repo's `c64` CLI makes this scriptable).
 

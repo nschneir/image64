@@ -48,13 +48,14 @@ final class ConversionOperationTests: XCTestCase {
     }
 
     private func request(
-        _ source: URL, mode: BitmapMode, c64: URL? = nil, png: URL? = nil
+        _ source: URL, mode: BitmapMode, c64: URL? = nil, png: URL? = nil, prg: URL? = nil
     ) -> ConversionRequest {
         var settings = ConversionSettings()
         settings.mode = mode
         var request = ConversionRequest(inputURL: source, settings: settings)
         request.c64OutputURL = c64
         request.pngOutputURL = png
+        request.prgOutputURL = prg
         return request
     }
 
@@ -486,5 +487,41 @@ final class ConversionOperationTests: XCTestCase {
         XCTAssertThrowsError(
             try ConversionOperation.run(request(source, mode: .multicolor, png: target))
         ) { XCTAssertEqual($0 as? ImageLoadingError, .unwritable(target)) }
+    }
+
+    func testAnUnwritablePRGDestinationThrowsUnwritable() throws {
+        // The PRG is written last, so this also pins that a failure there is
+        // reported as the same `unwritable` the other two outputs use rather
+        // than leaking `Data.write`'s Cocoa error through a different type.
+        let source = makeSource()
+        let target = url("no-such-directory/picture.prg")
+        XCTAssertThrowsError(
+            try ConversionOperation.run(request(source, mode: .multicolor, prg: target))
+        ) { XCTAssertEqual($0 as? ImageLoadingError, .unwritable(target)) }
+    }
+
+    // MARK: - All three outputs at once
+
+    func testAllThreeOutputsAreWrittenInTheDocumentedOrder() throws {
+        // `writtenFiles` is documented as C64 file, then PNG, then PRG, and the
+        // CLI prints it in that order — so the order is part of the contract,
+        // not an accident of the `if` sequence.
+        let source = makeSource()
+        let koala = url("picture.koa")
+        let png = url("picture.png")
+        let prg = url("picture.prg")
+
+        let result = try ConversionOperation.run(
+            request(source, mode: .multicolor, c64: koala, png: png, prg: prg))
+
+        XCTAssertEqual(result.writtenFiles, [koala, png, prg])
+
+        let program = try Data(contentsOf: prg)
+        // $0801 low byte first: a BASIC program's load address, which is what
+        // makes the file runnable rather than a memory dump.
+        XCTAssertEqual(Array(program.prefix(2)), [0x01, 0x08], "load address $0801")
+        // The same program the writer produces for this picture, byte for byte:
+        // `run` must not post-process what it writes.
+        XCTAssertEqual(program, C64PrgWriter.data(for: result.image))
     }
 }
