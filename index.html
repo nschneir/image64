@@ -195,7 +195,7 @@
     that converts modern images into pictures a Commodore 64 can display: crop,
     dither to the 16-color palette, satisfy the per-cell color limits, and export
     files that load on real hardware.</p>
-    <p class="status">status: <b>in design</b> — the spec is done, the code is not. No releases yet.</p>
+    <p class="status">status: <b>v1 implemented</b> — engine, app, and CLI are built and tested. Downloads arrive as GitHub Releases.</p>
     <div class="btns">
       <a class="btn primary" href="https://github.com/nschneir/image64">VIEW ON GITHUB ▸</a>
       <a class="btn" href="#constraints">THE CONSTRAINTS</a>
@@ -348,8 +348,17 @@ c64 run picture.prg    <span class="cm"># display it on the emulated machine</sp
     <ul class="plain">
       <li>Design and implementation plan complete: modes, pipeline, file
           formats, UI, CLI, and an agent skill are specified.</li>
-      <li>Implementation in progress, built task-by-task with tests first.
-          There is nothing to download yet.</li>
+      <li><b>v1 is implemented</b> — the conversion engine, the windowed app,
+          and the <code>image64</code> CLI — built task-by-task with tests
+          first, and the suite is green behind a 95% line-coverage gate on the
+          engine and the CLI.</li>
+      <li><b>Downloads</b> arrive as
+          <a href="https://github.com/nschneir/image64/releases">GitHub
+          Releases</a>: each tagged version attaches a zipped, universal
+          <code>image64.app</code>. It is unsigned, so the first launch is a
+          right-click ▸ <b>Open</b> to get past Gatekeeper. An empty releases
+          page means none has been cut yet — <code>swift build</code> from a
+          clone works today, and is the only way to get the CLI.</li>
       <li>Stack: Swift / SwiftUI, macOS 14+, one SwiftPM package. The
           conversion engine (<code>C64Kit</code>) is a UI-free library with its
           own test suite; the app and the <code>image64</code> CLI are thin

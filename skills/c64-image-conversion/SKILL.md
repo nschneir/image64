@@ -25,7 +25,7 @@ image64 convert <input> --output <out.koa|out.art> [--prg <out.prg>] [--png <out
 
 Options:
 
-- `--output` (`-o`): where to write the C64 picture. Required. The extension picks the format: `.koa` = Koala Painter, `.art` = Advanced Art Studio.
+- `--output` (`-o`): where to write the C64 picture. Required unless `--prg` is given — one of the two must be present, so a run that only wants the runnable program can omit this. The extension picks the format: `.koa` = Koala Painter, `.art` = Advanced Art Studio.
 - `--prg`: also write a runnable C64 program that displays the picture — a self-contained `.prg` that sets up the VIC-II and shows the image when it is loaded and run. This is the artifact to hand to an emulator or real hardware; a bare `.koa`/`.art` is display data, not a program. Can be passed without `--output` if the program is all you want.
 - `--png`: also write a 640×400 PNG rendered from the exact packed C64 bytes. Not a C64 format — it is a verification rendering, for your own eyes and for the golden tests. Worth passing on any conversion you intend to check.
 - `--mode`: `hires` or `multicolor`. Optional. The output extension already implies a mode; `--mode` only exists so you can force a mismatch when you want one. See the mode-inference rule below.

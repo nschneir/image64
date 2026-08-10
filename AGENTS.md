@@ -8,8 +8,11 @@ image64: a native macOS tool (Swift/SwiftUI, macOS 14+) that converts modern
 images to Commodore 64 bitmap-mode pictures — hires (320×200, 2 colors per
 8×8 cell) and multicolor (160×200, shared background + 3 colors per 4×8
 cell) — with drag-and-drop input, interactive 8:5 cropping, live before/after
-preview, and export to Koala (`.koa`), Art Studio (`.art`), and PNG. Two
-front ends — the windowed app and the `image64` CLI — drive the same engine.
+preview, and export to Koala (`.koa`), Art Studio (`.art`), and a runnable
+`.prg` that displays the picture. Two front ends — the windowed app and the
+`image64` CLI — drive the same engine. The CLI additionally writes a
+verification PNG (`--png`); the app deliberately does not, PNG being a
+check-the-output aid rather than a product of the tool.
 
 Where things are documented (don't duplicate them here):
 
@@ -65,7 +68,10 @@ routine commands into approval prompts.
 
 **Everything is validated locally, by decision — do not add CI checks
 without asking.** The gate is you, running the affected tests before you
-commit; nothing downstream will catch what you skip.
+commit; nothing downstream will catch what you skip. The maintainer-approved
+release workflow below is not a "CI check" in the sense of that rule: it fires
+on a tag push (or a manual smoke dispatch), not on your commits or a PR, and it
+re-runs `swift test` only to refuse to package a broken build.
 
 ### Releases
 
@@ -80,7 +86,11 @@ tags — the same rule that governs every other push; an agent never does.
 
 ## Code quality
 
-- Swift 5.10+, SwiftUI-first; no third-party dependencies without maintainer
+- Swift 5.10 language mode (`swift-tools-version: 5.10`), built with an
+  Xcode 16+ toolchain — the Swift 6 compiler is needed to *resolve*
+  swift-argument-parser's pinned version, which ships a Swift 6 manifest; the
+  language mode and the macOS 14 deployment target are unchanged by that.
+  SwiftUI-first; no third-party dependencies without maintainer
   approval — ImageIO, Core Image, and Core Graphics cover the engine's needs.
   The one permitted dependency is swift-argument-parser, in the CLI target
   only.

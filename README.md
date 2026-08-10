@@ -1,7 +1,8 @@
 # image64
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.md)
-![Swift 5.10+](https://img.shields.io/badge/Swift-5.10%2B-orange.svg)
+![Swift 5.10](https://img.shields.io/badge/Swift-5.10-orange.svg)
+![Xcode 16+](https://img.shields.io/badge/Xcode-16%2B-orange.svg)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue.svg)
 ![Built with AI](https://img.shields.io/badge/built%20with-AI-green.svg)
 
@@ -63,12 +64,20 @@ toolset; exported images drop straight into that workflow.
 
 ## Status
 
-**Alpha.** The engine, CLI, and app are implemented; expect rough edges.
-Build from source (below) — no packaged releases yet.
+**Alpha — v1 feature-complete.** The engine, CLI, and app are all implemented,
+with a green test suite behind a 95% line-coverage gate. Expect rough edges.
+Pre-built `image64.app` bundles are attached to GitHub Releases as they are
+published (see [Download](#download)); until then, or if you want the CLI,
+build from source (below).
 
 ## Building
 
-Requires Xcode 16+ (or its command-line tools) on macOS 14+.
+Building requires **Xcode 16 or newer** (or its command-line tools); running
+requires **macOS 14 or newer**. The Xcode 16 floor is a toolchain requirement,
+not a language one: this package is `swift-tools-version: 5.10` and stays in the
+Swift 5 language mode, but swift-argument-parser's pinned version declares a
+Swift 6 manifest, so dependency resolution needs a Swift 6 compiler. The
+deployment target is macOS 14 either way.
 
     git clone https://github.com/nschneir/image64.git
     cd image64
@@ -84,12 +93,15 @@ over it.
 
 ## Download
 
-A signed release is not yet published. Pre-built `image64.app` bundles are
-attached to each [GitHub
-Release](https://github.com/nschneir/image64/releases). Unzip, drag to
-Applications, and — because the bundle is unsigned in v1 — right-click the
-app and choose **Open** the first time to approve it past Gatekeeper.
-Requires macOS 14 or newer.
+Pre-built `image64.app` bundles are attached to each [GitHub
+Release](https://github.com/nschneir/image64/releases) as it is tagged — if that
+page is empty, no release has been cut yet and building from source is the way
+in. Unzip, drag to Applications, and — because the bundle is unsigned and
+un-notarized in v1 — right-click the app and choose **Open** the first time to
+approve it past Gatekeeper.
+
+The bundle is a universal binary (Apple Silicon + Intel) and requires macOS 14
+or newer. It contains the app only; the `image64` CLI comes from a source build.
 
 ## Trying the output
 
@@ -102,7 +114,19 @@ installed:
     image64 convert photo.jpg -o picture.koa --prg picture.prg
     x64sc picture.prg
 
-or, using [Project64](../Project64)'s CLI:
+In the app there is nothing to arrange: **Show in VICE** (⌘R) writes the program
+and launches the emulator on it. The command line needs one caveat — VICE's
+official macOS app distribution does not put `x64sc` on your `PATH`, so the line
+above works only for a shell install (`brew install vice`). With the app
+distribution, invoke its launcher script directly:
+
+    /path/to/VICE-GTK3-3.9/bin/x64sc picture.prg
+
+(the `bin/x64sc` script beside `VICE.app`, not the executable inside it — the
+script is what sets up the environment the emulator needs). The app finds that
+script by itself, which is why its button works with no `PATH` setup at all.
+
+Or, using [Project64](../Project64)'s CLI:
 
     c64 session start
     c64 run picture.prg

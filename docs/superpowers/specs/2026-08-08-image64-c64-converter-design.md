@@ -115,7 +115,9 @@ A single-window app:
    image's mode, copies bitmap/screen/color data into place, sets background
    and border, and loops. The command is disabled (with an explanatory
    tooltip) when `x64sc` is not found on `PATH` or in the Homebrew
-   locations. The same program is exportable as **File ▸ Export Runnable
+   locations — **superseded: see the 2026-08-10 amendment at the end of this
+   file**, which puts the VICE.app LaunchServices lookup first and launches the
+   distribution's `bin/x64sc` script. The same program is exportable as **File ▸ Export Runnable
    PRG…** and via the CLI's `--prg` option — it runs on real hardware and
    under Project64's `c64 run` too.
 
