@@ -133,14 +133,22 @@ final class AppModel {
         return generation
     }
 
-    /// Installs `image` if this call is still the newest in flight; drops
-    /// it otherwise. Either way `isConverting` clears — the task itself is
-    /// done, even when its result is not the one the user will see.
+    /// Installs `image` if this call is still the newest in flight; drops it
+    /// otherwise.
+    ///
+    /// A superseded result returns without touching `isConverting`: the newer
+    /// conversion that superseded it is still running, and clearing the flag
+    /// here would blink the preview spinner off and straight back on. Only the
+    /// generation that matches — the one the user is actually waiting for — is
+    /// allowed to clear it.
+    ///
+    /// The flag cannot get stuck as a result. `beginConvert` is the only place
+    /// that sets it, and every generation it hands out reaches exactly one
+    /// `install` call (`runConvert` always installs what the detached task
+    /// returns), so the newest generation in flight always arrives here and
+    /// always takes the clearing path.
     private func install(image: C64Image, generation: Int, palette: C64Palette) {
-        guard generation == self.generation else {
-            isConverting = false
-            return
-        }
+        guard generation == self.generation else { return }
         converted = image
         previewImage = ConversionOperation.previewImage(for: image, palette: palette)
         isConverting = false

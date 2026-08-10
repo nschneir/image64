@@ -32,14 +32,15 @@ struct Image64AppMain: App {
             RootView(model: model)
         }
         .commands {
-            // Without an .app bundle there is no Info.plist for the standard
-            // About panel to read, so it falls back to the executable's
-            // generic folder-ish icon and an empty name — which is what the
-            // maintainer was looking at. Supplying the options dictionary
-            // fixes the name, version, and credits today; the icon stays
-            // generic until Task 15 wraps the binary in a bundle with a real
-            // one, because the panel takes its icon from `NSApp.applicationIconImage`
-            // and there is nothing to point that at yet.
+            // Under `swift run Image64App` there is no Info.plist for the
+            // standard About panel to read, so it falls back to the
+            // executable's generic folder-ish icon and an empty name — which
+            // is what the maintainer was looking at. Supplying the options
+            // dictionary fixes the name, version, and credits in both cases:
+            // packaged (`scripts/make-app.sh`) and bare. The icon stays
+            // generic on purpose — v1 ships without one, and the panel takes
+            // its icon from `NSApp.applicationIconImage`, so there is nothing
+            // to point that at either way.
             CommandGroup(replacing: .appInfo) {
                 Button("About image64") {
                     let credits = NSAttributedString(
@@ -54,7 +55,7 @@ struct Image64AppMain: App {
                     NSApplication.shared.orderFrontStandardAboutPanel(
                         options: [
                             .applicationName: "image64",
-                            .applicationVersion: "0.1.0",
+                            .applicationVersion: displayVersion,
                             // The panel prints "Version <applicationVersion>
                             // (<version>)" and shows a bare "()" if the build
                             // number is absent rather than empty.
@@ -102,11 +103,14 @@ struct Image64AppMain: App {
                 Divider()
                 // Disabled rather than hidden when VICE is absent: a hidden
                 // command teaches the user the feature does not exist, a
-                // disabled one that something is missing (`brew install
-                // vice`). The README and skill spell out the install.
+                // disabled one that something is missing — the VICE app from
+                // vice-emu.sourceforge.io, or a `brew install vice`, in that
+                // order of likelihood, which is also the order
+                // `ViceLauncher.findX64sc()` looks and the order the error
+                // alert names them. The README and skill spell out the install.
                 Button("Show in VICE") { showInVICE(model: model) }
                     .keyboardShortcut("r", modifiers: .command)
-                    .disabled(model.converted == nil || ViceLauncher.findX64sc() == nil)
+                    .disabled(!canShowInVICE(model: model))
             }
         }
     }
@@ -157,7 +161,7 @@ private struct RootView: View {
                     Label("Show in VICE", systemImage: "play.display")
                 }
                 .help("Run the converted picture in the VICE emulator")
-                .disabled(model.converted == nil || ViceLauncher.findX64sc() == nil)
+                .disabled(!canShowInVICE(model: model))
             }
             ToolbarItem(placement: .primaryAction) {
                 ExportMenu(model: model)
@@ -200,6 +204,44 @@ private struct RootView: View {
         .frame(minWidth: 340, maxWidth: .infinity, maxHeight: .infinity)
         .layoutPriority(1)
     }
+}
+
+/// The version string the About panel reports.
+///
+/// Read from the bundle so a packaged `image64.app` always names the version it
+/// actually shipped: `scripts/make-app.sh` writes
+/// `CFBundleShortVersionString` from its version argument, and the release
+/// workflow passes the pushed tag. Under `swift run Image64App` there is no
+/// Info.plist at all, so the literal is the development fallback — and the one
+/// place a version literal still lives in this target, matching the script's
+/// own default.
+private let displayVersion: String =
+    Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
+
+/// Whether **Show in VICE** — the File-menu command and the toolbar button,
+/// which must agree — can do anything right now.
+///
+/// One predicate for both call sites: two copies of a disable rule drift, and
+/// this one has a subtlety worth stating once. `ViceLauncher.findX64sc()` does a
+/// LaunchServices lookup plus, on a miss, a full `PATH` walk of
+/// `isExecutableFile` checks — synchronous filesystem I/O — and a SwiftUI
+/// `body` is re-evaluated on every observable change, including every tick of a
+/// slider drag. So the lookup is resolved once per process instead.
+///
+/// The tradeoff, deliberately taken: installing VICE while image64 is running
+/// will not light the command up until the app is relaunched. That is a
+/// once-ever inconvenience; main-actor I/O on every redraw is a permanent one.
+@MainActor
+private func canShowInVICE(model: AppModel) -> Bool {
+    model.converted != nil && ViceInstallation.executable != nil
+}
+
+/// `x64sc`'s location, resolved on first read and cached for the process
+/// lifetime — see `canShowInVICE` for why. A `static let` so the one-time,
+/// thread-safe initialization is the language's rather than ours; `URL?` is
+/// `Sendable`, so the cache needs no isolation of its own.
+private enum ViceInstallation {
+    static let executable: URL? = ViceLauncher.findX64sc()
 }
 
 @MainActor
