@@ -5,6 +5,8 @@
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue.svg)
 ![Built with AI](https://img.shields.io/badge/built%20with-AI-green.svg)
 
+**Site:** https://nschneir.github.io/image64/
+
 image64 is a native macOS tool that converts modern images into pictures that
 satisfy the Commodore 64's bitmap-mode display constraints. It is both a
 windowed app — drag an image in, crop it, watch the live C64 preview — and an
