@@ -37,10 +37,14 @@ struct Image64AppMain: App {
             // executable's generic folder-ish icon and an empty name — which
             // is what the maintainer was looking at. Supplying the options
             // dictionary fixes the name, version, and credits in both cases:
-            // packaged (`scripts/make-app.sh`) and bare. The icon stays
-            // generic on purpose — v1 ships without one, and the panel takes
-            // its icon from `NSApp.applicationIconImage`, so there is nothing
-            // to point that at either way.
+            // packaged (`scripts/make-app.sh`) and bare. The icon is not in
+            // the dictionary because the panel reads
+            // `NSApp.applicationIconImage`, which LaunchServices already
+            // populates from the bundle's `CFBundleIconFile`
+            // (assets/icon/AppIcon.icns) — the packaged app gets it for free,
+            // and a bare `swift run` has no bundle to load it from, so a
+            // hardcoded developer path is the only thing overriding it here
+            // could buy.
             CommandGroup(replacing: .appInfo) {
                 Button("About image64") {
                     let credits = NSAttributedString(

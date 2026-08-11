@@ -56,6 +56,11 @@ The preview is rendered *from the packed C64 bytes* (`C64Image.render`),
 never from an intermediate representation — what the user sees must be
 exactly what exports. Preserve that invariant in any change to the pipeline.
 
+`assets/icon/` holds the app icon: `AppIcon.icns` (a build input copied into
+the bundle by `scripts/make-app.sh`), the 1024 master, the source motif, and
+the tools that regenerate all of it. The icon is itself a real conversion —
+don't redraw it by hand, and read `assets/icon/README.md` before touching it.
+
 ## Commands
 
 ```sh

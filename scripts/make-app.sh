@@ -10,8 +10,11 @@
 # and lets a Dock-icon drop reach `application(_:open:)`.
 #
 # Unsigned and un-notarized, for local use: Gatekeeper will want a
-# right-click ▸ Open the first time. There is no icon in v1 either — the
-# generic one is honest for an alpha.
+# right-click ▸ Open the first time.
+#
+# The icon comes from assets/icon/AppIcon.icns — a real image64 conversion,
+# see assets/icon/README.md. It is a build input, not a generated file, so it
+# is copied rather than rebuilt here.
 #
 # Usage: scripts/make-app.sh [version]
 #
@@ -48,8 +51,16 @@ BIN_PATH="$(swift build -c release "${ARCHS[@]}" --show-bin-path)"
 # bundle is the kind of thing that only shows up as inexplicable runtime
 # behavior much later.
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_PATH/Image64App" "$APP/Contents/MacOS/Image64App"
+
+# CFBundleIconFile below names this file, so a missing icns would ship a bundle
+# that silently falls back to the generic executable icon. Fail loudly instead.
+test -f assets/icon/AppIcon.icns || {
+	echo "error: assets/icon/AppIcon.icns is missing" >&2
+	exit 1
+}
+cp assets/icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 # Unquoted heredoc delimiter so ${VERSION} expands. Nothing else in this plist
 # body is a shell metacharacter — no `$`, no backticks, no `\` — so the only
@@ -70,6 +81,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 	<string>Image64App</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleShortVersionString</key>
 	<string>${VERSION}</string>
 	<key>CFBundleVersion</key>
