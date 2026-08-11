@@ -27,8 +27,19 @@ struct Image64AppMain: App {
     /// below reading `model`, as they did when it was `@State`.
     private var model: AppModel { appDelegate.model }
 
+    /// Puts the one window back on screen — see `mainWindowID` for why every
+    /// in-process open route has to ask for this by hand.
+    @Environment(\.openWindow) private var openWindow
+
     var body: some Scene {
-        WindowGroup("image64") {
+        // Still a `WindowGroup`, and the `id` is only so `openWindow(id:)` can
+        // name it. A single-instance `Window` scene looks like the tidier fit
+        // for a one-window tool, and it would reduce `revealMainWindow(using:)`
+        // to one unguarded call — but measured, closing that scene's window
+        // *quits the app*, turning ⌘W into ⌘Q and throwing away the loaded
+        // picture and its settings. That is a behavior change nobody asked for,
+        // so the group stays and the reveal does the extra work instead.
+        WindowGroup("image64", id: mainWindowID) {
             RootView(model: model)
         }
         // Without a `defaultSize` SwiftUI opens the window at the *minimum*
@@ -47,8 +58,10 @@ struct Image64AppMain: App {
                 Button("About image64") { showAboutPanel() }
             }
             CommandGroup(replacing: .newItem) {
-                Button("Open…") { openImagePanel(model: model) }
-                    .keyboardShortcut("o", modifiers: .command)
+                Button("Open…") {
+                    openImagePanel(model: model, reveal: revealWindow)
+                }
+                .keyboardShortcut("o", modifiers: .command)
             }
             CommandGroup(after: .newItem) {
                 // `recentDocumentURLs` is read when SwiftUI builds this menu,
@@ -60,7 +73,10 @@ struct Image64AppMain: App {
                 // we do not want.
                 Menu("Open Recent") {
                     ForEach(NSDocumentController.shared.recentDocumentURLs, id: \.self) { url in
-                        Button(url.lastPathComponent) { model.load(url: url) }
+                        Button(url.lastPathComponent) {
+                            model.load(url: url)
+                            revealWindow()
+                        }
                     }
                     if !NSDocumentController.shared.recentDocumentURLs.isEmpty {
                         Divider()
@@ -95,6 +111,63 @@ struct Image64AppMain: App {
                     .disabled(!canShowInVICE(model: model))
             }
         }
+    }
+
+    /// The reveal handed to every in-process open route, so they all run the
+    /// one implementation in `revealMainWindow(using:)`.
+    private func revealWindow() {
+        revealMainWindow(using: openWindow)
+    }
+}
+
+/// The one window's identity, so the open commands can name it.
+///
+/// Closing the last window does not quit a Mac app, and this one has no
+/// document model to bring it back: with the window closed, File ▸ Open… ran
+/// its panel, `AppModel.load` succeeded, and the picture landed in a model
+/// nothing was displaying — measured as `source=after.png error=nil` with zero
+/// visible windows, which is the "open does not open a window after you select
+/// a file" that was reported.
+///
+/// The routes that come in through LaunchServices — a Finder ▸ Open With, a
+/// Dock-icon drop, a plain Dock click — already resurface the window, because
+/// AppKit reopens the scene as part of activating the app (measured: both put a
+/// window back on screen with no code of ours involved, before and after this
+/// change). The in-process routes get no such help and have to ask, which is
+/// what `revealWindow()` is for; naming the window is the price of asking.
+///
+/// So the rule is: anything that puts a picture into the model from inside the
+/// app — File ▸ Open…, Open Recent, the empty state's click-to-browse — reveals
+/// the window afterwards. A drop onto the window cannot need it.
+private let mainWindowID = "main"
+
+/// Puts the one window back on screen, or brings it forward if it never left.
+///
+/// The existing-window check is what keeps the app single-window. A
+/// `WindowGroup` is a *template*: `openWindow(id:)` asks it for a new window
+/// every time, so calling it unconditionally answers File ▸ Open… with a second
+/// copy of the UI — measured, two windows. Asking only when there is nothing to
+/// bring forward keeps the one-window model intact.
+///
+/// The check reaches for AppKit because SwiftUI on macOS 14 has no way to ask
+/// whether a scene's window is open. `canBecomeMain` is what separates the app's
+/// real window from the panels (About, open, save) that also live in
+/// `NSApp.windows`, and a miniaturized window counts as present — it is in the
+/// Dock, not gone, and conjuring a second window beside it would be the very
+/// bug this guards against.
+///
+/// One function rather than a closure per call site: three routes need this, and
+/// a rule about how many windows the app has is not a thing to reimplement three
+/// times.
+@MainActor
+func revealMainWindow(using openWindow: OpenWindowAction) {
+    if let window = NSApp.windows.first(where: {
+        $0.canBecomeMain && ($0.isVisible || $0.isMiniaturized)
+    }) {
+        window.deminiaturize(nil)
+        window.makeKeyAndOrderFront(nil)
+    } else {
+        openWindow(id: mainWindowID)
     }
 }
 

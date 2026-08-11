@@ -12,8 +12,14 @@ import UniformTypeIdentifiers
 /// empty state is now the primary place a user reaches for it — the File ▸
 /// Open… command calls the same function, so both routes share one panel
 /// configuration instead of drifting apart.
+///
+/// `reveal` is called only when a file was actually chosen and loaded, and it
+/// is what puts the window back when the command ran with the window closed —
+/// see `mainWindowID`. Cancelling the panel deliberately reveals nothing: the
+/// user asked for no picture, and conjuring an empty window at them is not an
+/// answer to that.
 @MainActor
-func openImagePanel(model: AppModel) {
+func openImagePanel(model: AppModel, reveal: () -> Void) {
     let panel = NSOpenPanel()
     panel.canChooseFiles = true
     panel.canChooseDirectories = false
@@ -21,6 +27,7 @@ func openImagePanel(model: AppModel) {
     panel.allowedContentTypes = [.image]
     if panel.runModal() == .OK, let url = panel.url {
         model.load(url: url)
+        reveal()
     }
 }
 
@@ -32,6 +39,12 @@ func openImagePanel(model: AppModel) {
 /// always-on overlay share one implementation.
 struct DropView: View {
     let model: AppModel
+
+    /// Passed through to `openImagePanel` so both routes into the panel share
+    /// one signature. Clicking this well means the window is already on screen,
+    /// so the reveal is a no-op here — but a no-op that keeps the File menu
+    /// command and the well running the identical code.
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: 12) {
@@ -62,7 +75,9 @@ struct DropView: View {
         // affordance (Xcode's asset well, Safari's downloads shelf), and it
         // only reads as one if the entire well is clickable.
         .contentShape(Rectangle())
-        .onTapGesture { openImagePanel(model: model) }
+        .onTapGesture {
+            openImagePanel(model: model) { revealMainWindow(using: openWindow) }
+        }
         .help("Click to choose an image, or drop one here")
         .dropReceiver(model: model)
     }
