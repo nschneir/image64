@@ -285,16 +285,23 @@ private let aboutCredits: NSAttributedString = {
         ])
 }()
 
-/// The copyright and license line the About panel reports.
+/// What the About panel's copyright slot says: exactly "MIT license.", by
+/// maintainer decision.
+///
+/// Not the fuller "Copyright © … contributors" sentence one might expect of the
+/// slot (or of `NSHumanReadableCopyright`, which is where the packaged app reads
+/// it from and what Finder's Get Info shows). The license is the part worth a
+/// line in an About panel this small; `LICENSE.md` remains the authority on
+/// holder and year and is deliberately not restated here, so the two are *not*
+/// kept in step — don't "fix" this back into a copyright sentence.
 ///
 /// Read from the bundle for the same reason as `displayVersion`:
-/// `scripts/make-app.sh` writes `NSHumanReadableCopyright` — which is also what
-/// Finder's Get Info shows — so a packaged app reports whatever it shipped
-/// with, and the literal is the `swift run` fallback. The wording tracks
-/// `LICENSE.md`; keep the two in step.
+/// `scripts/make-app.sh` writes the key, so a packaged app reports whatever it
+/// shipped with, and the literal is the `swift run` fallback. Change one and
+/// change the other.
 private let displayCopyright: String =
     Bundle.main.infoDictionary?["NSHumanReadableCopyright"] as? String
-    ?? "Copyright © 2026 image64 contributors. MIT license."
+    ?? "MIT license."
 
 /// The version string the About panel reports.
 ///

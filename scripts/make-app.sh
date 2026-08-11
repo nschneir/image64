@@ -7,8 +7,10 @@
 # needs to treat the executable as an app: a MacOS/ payload and an Info.plist.
 # The plist is what buys the menu-bar name, the About panel's identity (name,
 # version, and the NSHumanReadableCopyright line that Finder's Get Info shows
-# too), and the CFBundleDocumentTypes entry that puts image64 in Finder's "Open
-# With" and lets a Dock-icon drop reach `application(_:open:)`.
+# too — deliberately just "MIT license.", matching `displayCopyright` in the app;
+# LICENSE.md is where holder and year live), and the CFBundleDocumentTypes entry
+# that puts image64 in Finder's "Open With" and lets a Dock-icon drop reach
+# `application(_:open:)`.
 #
 # Unsigned and un-notarized, for local use: Gatekeeper will want a
 # right-click ▸ Open the first time.
@@ -89,7 +91,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 	<key>CFBundleVersion</key>
 	<string>${VERSION}</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>Copyright © 2026 image64 contributors. MIT license.</string>
+	<string>MIT license.</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>CFBundleDocumentTypes</key>
