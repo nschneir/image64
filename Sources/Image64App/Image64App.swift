@@ -266,6 +266,13 @@ private let aboutPanelCopyright = NSApplication.AboutPanelOptionKey(rawValue: "C
 /// is what Apple's own panels use for this block, and the label color is stated
 /// rather than left to the text view so the line follows the appearance in dark
 /// mode as the panel's other text does.
+///
+/// `NSColor` rather than a SwiftUI `ShapeStyle` is not a lapse against the
+/// house rule: this is an `NSAttributedString` attribute dictionary, and
+/// `.foregroundColor` is typed to `NSColor` there — no SwiftUI style can be put
+/// in it, and there is no SwiftUI view in this path to attach a
+/// `foregroundStyle` to. `labelColor` is the semantic, appearance-following
+/// choice within that constraint.
 private let aboutCredits: NSAttributedString = {
     let centered = NSMutableParagraphStyle()
     centered.alignment = .center

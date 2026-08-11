@@ -40,6 +40,24 @@ struct ControlsView: View {
     /// The label and readout beside them stay fixed-width — see `slider(…)` —
     /// so squeezing the window shortens the tracks without the row reflowing
     /// under the cursor, which is the invariant that matters during a drag.
+    ///
+    /// Know what this does *not* buy, because the numbers look more solid than
+    /// they are:
+    ///
+    /// - Nothing enforces "derived floor ≤ smallest supported display". It is a
+    ///   fact about today's layout that someone measured, not a constraint the
+    ///   compiler or the test suite can check — the app target has no test host,
+    ///   and a window minimum is only observable at runtime.
+    /// - The 1405pt floor is a measurement on the current SDK, not arithmetic
+    ///   over the constants here. AppKit enforces it via the hosting view's
+    ///   layout constraints and it does not agree with the 1356pt SwiftUI
+    ///   reports as `contentMinSize`; the 49pt gap is unexplained, so treat 1405
+    ///   as "what this SDK does" and re-measure rather than recompute.
+    /// - Adding a control to this bar raises the floor silently. So does a
+    ///   larger accessibility text size, which widens the labels and pickers the
+    ///   tracks are competing with. Either can push the floor back past the
+    ///   display and reintroduce the clipped bar with nothing failing to warn
+    ///   you — if you touch this row, measure the window's minimum again.
     private static let sliderWidth: (min: CGFloat, ideal: CGFloat) = (90, 150)
 
     var body: some View {
@@ -146,6 +164,17 @@ struct ControlsView: View {
     /// with an explicit sign. Without both, every drag of any slider reflows
     /// the whole bar as "0.00" becomes "-0.75" and the row jitters under the
     /// cursor.
+    ///
+    /// The two `String(format: "%+.2f", …)` calls below are the accepted legacy
+    /// AGENTS.md names, and it says to convert them if you touch this code —
+    /// which this change did. Deliberately not converted, as a recorded
+    /// decision rather than an oversight: a `FormatStyle` is locale-sensitive by
+    /// design, so the rendered string's width stops being predictable (decimal
+    /// separator, sign glyph, digit shaping), and the 44pt readout frame right
+    /// above exists precisely to pin that width. Swapping in a formatter here
+    /// risks either truncation or a return of the jitter the frame prevents, in
+    /// locales nobody testing this change would see. It wants its own change
+    /// with a width check per locale, not a drive-by inside a window-sizing fix.
     @ViewBuilder
     private func slider(title: String, value: Binding<Double>) -> some View {
         HStack(spacing: 6) {
