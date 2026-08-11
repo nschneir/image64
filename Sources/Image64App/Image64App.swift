@@ -31,6 +31,17 @@ struct Image64AppMain: App {
         WindowGroup("image64") {
             RootView(model: model)
         }
+        // Without a `defaultSize` SwiftUI opens the window at the *minimum*
+        // size its content reports — which is by definition the most cramped
+        // arrangement the UI still fits in, not a first impression to lead
+        // with. This asks for a window wide enough that the controls bar draws
+        // at its natural width (see `ControlsView.sliderWidth`) and tall enough
+        // that crop and preview are both worth looking at. It is a preference,
+        // not a demand: AppKit constrains a new window's frame to the screen's
+        // visible area, so on a laptop display the window simply opens as large
+        // as fits, and the content minimum — which is honest now, see
+        // `RootView` — guarantees nothing clips at that smaller size either.
+        .defaultSize(width: 1560, height: 900)
         .commands {
             // Under `swift run Image64App` there is no Info.plist for the
             // standard About panel to read, so it falls back to the
@@ -142,11 +153,30 @@ private struct RootView: View {
             Divider()
             ControlsView(model: model)
         }
-        // Taller and wider than before: the controls bar now takes real
-        // vertical space instead of floating over the panes, and at
-        // `.controlSize(.regular)` its row needs the extra width to lay out
-        // without the sliders collapsing.
-        .frame(minWidth: 980, minHeight: 560)
+        // No `minWidth` on purpose. A frame minimum *overrides* the content's
+        // own, and SwiftUI hands whatever this view reports to the window as
+        // `contentMinSize` — so the `minWidth: 980` that used to be here was a
+        // fabricated floor 556pt narrower than the width the controls bar
+        // actually needs (1536pt at `.controlSize(.regular)`, measured). The
+        // bar cannot compress below its natural width, so it overflowed a
+        // window opened at that floor: the Mode picker laid out at x = -219 and
+        // Reset past the right edge, which is the clipped bottom bar that was
+        // reported. Omitting the minimum lets SwiftUI derive it from the bar
+        // itself, so it cannot drift out of date the next time a control is
+        // added there — a number here would only lie again.
+        //
+        // The derived minimum is also what makes the window correct itself: an
+        // undersized frame is now illegal rather than merely cramped, so AppKit
+        // grows it back on the first layout, wherever it came from — a restored
+        // frame saved by an older build included. With the fabricated 980 in
+        // place, such a frame was legal and simply stayed clipped.
+        //
+        // `minHeight` is a different kind of constraint and stays: nothing
+        // clips vertically at any height (the split view's own natural minimum
+        // is ~185pt and both panes are flexible), so this is a usability floor
+        // — the smallest crop-and-preview pair worth showing — rather than a
+        // fit requirement.
+        .frame(minHeight: 560)
         .navigationTitle(model.sourceURL?.lastPathComponent ?? "image64")
         // Two toolbar items, both actions: Show in VICE and the export menu in
         // `.primaryAction` placement, which macOS lays out last (trailing). The

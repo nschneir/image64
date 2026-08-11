@@ -25,6 +25,23 @@ struct ControlsView: View {
     /// bars cutting the window.
     private static let dividerHeight: CGFloat = 24
 
+    /// The track width of a tone slider: what it wants, and the least it will
+    /// accept.
+    ///
+    /// This bar is the widest thing in the window, so its natural width *is*
+    /// the window's minimum width — SwiftUI derives `contentMinSize` from it
+    /// (see `RootView`). Pinned at the ideal, that minimum came to 1536pt,
+    /// wider than the 1440pt a 13" MacBook Air runs at by default: the window
+    /// would not have fit the screen, which is the same clipped bar in a
+    /// different disguise. Letting the three tracks give up 60pt each puts the
+    /// smallest window the bar can draw in at 1405pt (measured), which fits,
+    /// while `defaultSize` still opens wide enough to show them at `ideal`.
+    ///
+    /// The label and readout beside them stay fixed-width — see `slider(…)` —
+    /// so squeezing the window shortens the tracks without the row reflowing
+    /// under the cursor, which is the invariant that matters during a drag.
+    private static let sliderWidth: (min: CGFloat, ideal: CGFloat) = (90, 150)
+
     var body: some View {
         HStack(spacing: 12) {
             // The mode picker used to live in the title bar. A segmented
@@ -136,7 +153,10 @@ struct ControlsView: View {
                 .frame(width: 68, alignment: .trailing)
 
             Slider(value: value, in: -1...1)
-                .frame(width: 150)
+                .frame(
+                    minWidth: Self.sliderWidth.min,
+                    idealWidth: Self.sliderWidth.ideal,
+                    maxWidth: Self.sliderWidth.ideal)
                 .accessibilityLabel(title)
                 .accessibilityValue(String(format: "%+.2f", value.wrappedValue))
 
