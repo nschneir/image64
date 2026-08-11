@@ -43,41 +43,8 @@ struct Image64AppMain: App {
         // `RootView` — guarantees nothing clips at that smaller size either.
         .defaultSize(width: 1560, height: 900)
         .commands {
-            // Under `swift run Image64App` there is no Info.plist for the
-            // standard About panel to read, so it falls back to the
-            // executable's generic folder-ish icon and an empty name — which
-            // is what the maintainer was looking at. Supplying the options
-            // dictionary fixes the name, version, and credits in both cases:
-            // packaged (`scripts/make-app.sh`) and bare. The icon is not in
-            // the dictionary because the panel reads
-            // `NSApp.applicationIconImage`, which LaunchServices already
-            // populates from the bundle's `CFBundleIconFile`
-            // (assets/icon/AppIcon.icns) — the packaged app gets it for free,
-            // and a bare `swift run` has no bundle to load it from, so a
-            // hardcoded developer path is the only thing overriding it here
-            // could buy.
             CommandGroup(replacing: .appInfo) {
-                Button("About image64") {
-                    let credits = NSAttributedString(
-                        string: """
-                            Converts modern images into Commodore 64 bitmap-mode pictures.
-                            MIT license.
-                            """,
-                        attributes: [
-                            .font: NSFont.systemFont(
-                                ofSize: NSFont.smallSystemFontSize)
-                        ])
-                    NSApplication.shared.orderFrontStandardAboutPanel(
-                        options: [
-                            .applicationName: "image64",
-                            .applicationVersion: displayVersion,
-                            // The panel prints "Version <applicationVersion>
-                            // (<version>)" and shows a bare "()" if the build
-                            // number is absent rather than empty.
-                            .version: "",
-                            .credits: credits,
-                        ])
-                }
+                Button("About image64") { showAboutPanel() }
             }
             CommandGroup(replacing: .newItem) {
                 Button("Open…") { openImagePanel(model: model) }
@@ -239,6 +206,88 @@ private struct RootView: View {
         .layoutPriority(1)
     }
 }
+
+/// Shows the About panel: icon, name, version, a one-line description, and the
+/// copyright.
+///
+/// The *standard* panel rather than a custom SwiftUI window, deliberately. It
+/// is the shape a Mac user already knows, it inherits behavior no About box
+/// should be reimplementing (a single shared instance, Escape to close, correct
+/// placement, selectable text, the right materials in both appearances), and
+/// every field below is one the panel already has a slot for — this fills those
+/// slots in rather than laying anything out.
+///
+/// Under `swift run Image64App` there is no Info.plist for the panel to read,
+/// so it falls back to the executable's generic folder-ish icon and an empty
+/// name. Supplying the options dictionary fixes name, version, description, and
+/// copyright in both cases: packaged (`scripts/make-app.sh`) and bare. The icon
+/// is not in the dictionary because the panel reads
+/// `NSApp.applicationIconImage`, which LaunchServices already populates from
+/// the bundle's `CFBundleIconFile` (assets/icon/AppIcon.icns) — the packaged
+/// app gets the real app icon for free, and a bare `swift run` has no bundle to
+/// load it from, so a hardcoded developer path is the only thing overriding it
+/// here could buy.
+@MainActor
+private func showAboutPanel() {
+    NSApplication.shared.orderFrontStandardAboutPanel(
+        options: [
+            .applicationName: "image64",
+            .applicationVersion: displayVersion,
+            // The panel prints "Version <applicationVersion> (<version>)" and
+            // shows a bare "()" if the build number is absent rather than
+            // empty.
+            .version: "",
+            .credits: aboutCredits,
+            aboutPanelCopyright: displayCopyright,
+        ])
+}
+
+/// The panel's copyright slot.
+///
+/// `NSAboutPanelOptionKey` has no constant for it: the documented default is
+/// that the panel reads `NSHumanReadableCopyright` from the bundle, which the
+/// packaged app supplies but a bare `swift run` has no plist for. `"Copyright"`
+/// is the panel's own long-standing key for overriding that, so passing it
+/// fills the slot in both cases — and it is a slot, not an extra line: the
+/// panel renders it in its own small centered style below the credits, exactly
+/// where a Mac user looks for the license.
+private let aboutPanelCopyright = NSApplication.AboutPanelOptionKey(rawValue: "Copyright")
+
+/// The centered line under the version telling the user what this app is.
+///
+/// One line, because the panel is an identity card and not a feature list; the
+/// license sits below it in the panel's copyright slot rather than being
+/// repeated here.
+///
+/// The panel centers its icon, name, and version but left-aligns the credits —
+/// credits are an `NSTextView`, and that is a text view's natural alignment. In
+/// an otherwise centered panel that reads as a block shoved to one side, which
+/// is why the paragraph style says `.center` explicitly. The small system font
+/// is what Apple's own panels use for this block, and the label color is stated
+/// rather than left to the text view so the line follows the appearance in dark
+/// mode as the panel's other text does.
+private let aboutCredits: NSAttributedString = {
+    let centered = NSMutableParagraphStyle()
+    centered.alignment = .center
+    return NSAttributedString(
+        string: "Converts modern images into Commodore 64 bitmap-mode pictures.",
+        attributes: [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+            .foregroundColor: NSColor.labelColor,
+            .paragraphStyle: centered,
+        ])
+}()
+
+/// The copyright and license line the About panel reports.
+///
+/// Read from the bundle for the same reason as `displayVersion`:
+/// `scripts/make-app.sh` writes `NSHumanReadableCopyright` — which is also what
+/// Finder's Get Info shows — so a packaged app reports whatever it shipped
+/// with, and the literal is the `swift run` fallback. The wording tracks
+/// `LICENSE.md`; keep the two in step.
+private let displayCopyright: String =
+    Bundle.main.infoDictionary?["NSHumanReadableCopyright"] as? String
+    ?? "Copyright © 2026 image64 contributors. MIT license."
 
 /// The version string the About panel reports.
 ///
