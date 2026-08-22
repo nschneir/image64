@@ -195,7 +195,7 @@
     that converts modern images into pictures a Commodore 64 can display: crop,
     dither to the 16-color palette, satisfy the per-cell color limits, and export
     files that load on real hardware.</p>
-    <p class="status">status: <b>v1 implemented</b> — engine, app, and CLI are built and tested. Downloads arrive as GitHub Releases.</p>
+    <p class="status">status: <b>v1.0.0</b> — engine, app, and CLI are built and tested. <a href="https://github.com/nschneir/image64/releases/tag/v1.0.0">Download it from GitHub Releases</a>.</p>
     <div class="btns">
       <a class="btn primary" href="https://github.com/nschneir/image64">VIEW ON GITHUB ▸</a>
       <a class="btn" href="#constraints">THE CONSTRAINTS</a>
@@ -343,28 +343,28 @@ image64 convert photo.jpg -o out.koa --dither bayer --palette colodore --json</p
 c64 run picture.prg    <span class="cm"># display it on the emulated machine</span></pre></div>
   </section>
 
-  <section id="status" class="reveal">
-    <h2>STATUS</h2>
-    <ul class="plain">
-      <li>Design and implementation plan complete: modes, pipeline, file
-          formats, UI, CLI, and an agent skill are specified.</li>
-      <li><b>v1 is implemented</b> — the conversion engine, the windowed app,
-          and the <code>image64</code> CLI — built task-by-task with tests
-          first, and the suite is green behind a 95% line-coverage gate on the
-          engine and the CLI.</li>
-      <li><b>Downloads</b> arrive as
-          <a href="https://github.com/nschneir/image64/releases">GitHub
-          Releases</a>: each tagged version attaches a zipped, universal
-          <code>image64.app</code>. It is unsigned, so the first launch is a
-          right-click ▸ <b>Open</b> to get past Gatekeeper. An empty releases
-          page means none has been cut yet — <code>swift build</code> from a
-          clone works today, and is the only way to get the CLI.</li>
-      <li>Stack: Swift / SwiftUI, macOS 14+, one SwiftPM package. The
-          conversion engine (<code>C64Kit</code>) is a UI-free library with its
-          own test suite; the app and the <code>image64</code> CLI are thin
-          front ends over it. The app packages as an unsigned
-          <code>image64.app</code> built by a script.</li>
-    </ul>
+  <section id="related" class="reveal">
+    <h2>RELATED PROJECTS</h2>
+    <p>Three Commodore toolsets built the same way — AI-written, human-directed,
+    and pointed at what the hardware actually does rather than an approximation
+    of it.</p>
+    <div class="fmt">
+      <div class="f">
+        <h3>PROJECT 64 <small>— the C64</small></h3>
+        <p>Tools, skills, and an MCP for agentic Commodore 64 coding and
+        debugging through the VICE emulator, driven by a <code>c64</code>
+        command-line tool. image64's downstream neighbor: an exported
+        <code>.prg</code> runs with <code>c64 run picture.prg</code>.</p>
+        <p><a href="https://nschneir.github.io/Project64/">nschneir.github.io/Project64 ▸</a></p>
+      </div>
+      <div class="f">
+        <h3>PET PROJECT <small>— the PET</small></h3>
+        <p>The same toolset aimed at the Commodore PET, driven by a
+        <code>pet</code> command-line tool and VICE's <code>xpet</code>,
+        covering the PET's own models and its 40- and 80-column screens.</p>
+        <p><a href="https://nschneir.github.io/PET-Project/">nschneir.github.io/PET-Project ▸</a></p>
+      </div>
+    </div>
   </section>
 
   <footer class="reveal">

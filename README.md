@@ -64,11 +64,11 @@ toolset; exported images drop straight into that workflow.
 
 ## Status
 
-**Alpha — v1 feature-complete.** The engine, CLI, and app are all implemented,
-with a green test suite behind a 95% line-coverage gate. Expect rough edges.
-Pre-built `image64.app` bundles are attached to GitHub Releases as they are
-published (see [Download](#download)); until then, or if you want the CLI,
-build from source (below).
+**v1.0.0.** The engine, CLI, and app are all implemented, with a green test
+suite behind a 95% line-coverage gate. A pre-built, universal `image64.app` is
+attached to the [v1.0.0
+release](https://github.com/nschneir/image64/releases/tag/v1.0.0) (see
+[Download](#download)); the `image64` CLI comes from a source build (below).
 
 ## Building
 
@@ -93,12 +93,12 @@ over it.
 
 ## Download
 
-Pre-built `image64.app` bundles are attached to each [GitHub
-Release](https://github.com/nschneir/image64/releases) as it is tagged — if that
-page is empty, no release has been cut yet and building from source is the way
-in. Unzip, drag to Applications, and — because the bundle is unsigned and
-un-notarized in v1 — right-click the app and choose **Open** the first time to
-approve it past Gatekeeper.
+A zipped `image64.app` is attached to each [GitHub
+Release](https://github.com/nschneir/image64/releases) as it is tagged;
+[v1.0.0](https://github.com/nschneir/image64/releases/tag/v1.0.0) is the
+current one. Unzip, drag to Applications, and — because the bundle is unsigned
+and un-notarized in v1 — right-click the app and choose **Open** the first time
+to approve it past Gatekeeper.
 
 The bundle is a universal binary (Apple Silicon + Intel) and requires macOS 14
 or newer. It contains the app only; the `image64` CLI comes from a source build.
@@ -137,6 +137,20 @@ image64 is developed primarily by AI — Anthropic's Claude, working through
 Claude Code — under human direction: a human sets the goals, reviews the
 designs and plans, and approves the work; the AI writes the specs, plans,
 code, tests, and documentation.
+
+## Related projects
+
+image64 is one of three Commodore toolsets built the same way — AI-written,
+human-directed, and pointed at real hardware behavior rather than an
+approximation of it.
+
+- **[Project64](https://nschneir.github.io/Project64/)** — tools, skills, and
+  an MCP for agentic Commodore 64 coding and debugging through the VICE
+  emulator, driven by a `c64` command-line tool. It is image64's downstream
+  neighbor: an exported `.prg` runs with `c64 run picture.prg`.
+- **[PET Project](https://nschneir.github.io/PET-Project/)** — the same
+  toolset aimed at the Commodore PET, driven by a `pet` command-line tool and
+  VICE's `xpet`, covering the PET's own models and its 40/80-column screens.
 
 ## License
 
