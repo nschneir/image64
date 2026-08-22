@@ -386,7 +386,7 @@ private let displayCopyright: String =
 /// place a version literal still lives in this target, matching the script's
 /// own default.
 private let displayVersion: String =
-    Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
+    Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
 
 /// Whether **Show in VICE** — the File-menu command and the toolbar button,
 /// which must agree — can do anything right now.

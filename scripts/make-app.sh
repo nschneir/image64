@@ -37,7 +37,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 APP="dist/image64.app"
-VERSION="${1:-0.1.0}"
+VERSION="${1:-1.0.0}"
 
 # Universal so one downloaded .app runs on both Apple Silicon and Intel Macs
 # still supported by the macOS 14 floor. A single-arch build on an arm64 runner

@@ -89,8 +89,8 @@ re-runs `swift test` only to refuse to package a broken build.
 
 ```sh
 # cut a release: workflow zips dist/image64.app and attaches it
-git tag v0.1.0
-git push origin v0.1.0
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 The tag drives `.github/workflows/release.yml`. Only the maintainer pushes
