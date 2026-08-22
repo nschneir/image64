@@ -13,6 +13,10 @@ import SwiftUI
 /// whitespace alone so the three clusters (what to produce, how to quantize,
 /// how to tone) are legible at a glance.
 ///
+/// The bar reflows to two rows when one will not fit — see `body`. Controls
+/// never shrink to achieve that; the layout changes shape instead, which is the
+/// same trade a native bar makes.
+///
 /// `@Bindable` is required because SwiftUI needs writable bindings
 /// (`$model.settings.foo`) to hand to `Picker` and `Slider`, and an
 /// `@Observable` reference type only produces those through the `@Bindable`
@@ -28,111 +32,54 @@ struct ControlsView: View {
     /// The track width of a tone slider: what it wants, and the least it will
     /// accept.
     ///
-    /// This bar is the widest thing in the window, so its natural width *is*
-    /// the window's minimum width — SwiftUI derives `contentMinSize` from it
-    /// (see `RootView`). Pinned at the ideal, that minimum came to 1536pt,
-    /// wider than the 1440pt a 13" MacBook Air runs at by default: the window
-    /// would not have fit the screen, which is the same clipped bar in a
-    /// different disguise. Letting the three tracks give up 60pt each puts the
-    /// smallest window the bar can draw in at 1405pt (measured), which fits,
-    /// while `defaultSize` still opens wide enough to show them at `ideal`.
+    /// Both numbers are still load-bearing, but they no longer decide whether
+    /// the app fits on a display. A single row of everything is the *first*
+    /// thing `body` tries, not the only thing it can draw, so these govern how
+    /// long the tracks are while a wide window still holds one row — and the
+    /// two-row fallback is what the window's minimum width comes from.
     ///
     /// The label and readout beside them stay fixed-width — see `slider(…)` —
     /// so squeezing the window shortens the tracks without the row reflowing
     /// under the cursor, which is the invariant that matters during a drag.
     ///
-    /// Know what this does *not* buy, because the numbers look more solid than
-    /// they are:
-    ///
-    /// - Nothing enforces "derived floor ≤ smallest supported display". It is a
-    ///   fact about today's layout that someone measured, not a constraint the
-    ///   compiler or the test suite can check — the app target has no test host,
-    ///   and a window minimum is only observable at runtime.
-    /// - The 1405pt floor is a measurement on the current SDK, not arithmetic
-    ///   over the constants here. AppKit enforces it via the hosting view's
-    ///   layout constraints and it does not agree with the 1356pt SwiftUI
-    ///   reports as `contentMinSize`; the 49pt gap is unexplained, so treat 1405
-    ///   as "what this SDK does" and re-measure rather than recompute.
-    /// - Adding a control to this bar raises the floor silently. So does a
-    ///   larger accessibility text size, which widens the labels and pickers the
-    ///   tracks are competing with. Either can push the floor back past the
-    ///   display and reintroduce the clipped bar with nothing failing to warn
-    ///   you — if you touch this row, measure the window's minimum again.
+    /// The two `String(format: "%+.2f", …)` calls in `slider(…)` are the
+    /// accepted legacy AGENTS.md names, and it says to convert them if you touch
+    /// this code. Deliberately not converted, as a recorded decision rather than
+    /// an oversight: a `FormatStyle` is locale-sensitive by design, so the
+    /// rendered string's width stops being predictable (decimal separator, sign
+    /// glyph, digit shaping), and the 44pt readout frame exists precisely to pin
+    /// that width. Swapping in a formatter risks either truncation or a return
+    /// of the jitter the frame prevents, in locales nobody testing this would
+    /// see. It wants its own change with a width check per locale.
     private static let sliderWidth: (min: CGFloat, ideal: CGFloat) = (90, 150)
 
     var body: some View {
-        HStack(spacing: 12) {
-            // The mode picker used to live in the title bar. A segmented
-            // control in the toolbar is not a standard macOS title-bar
-            // element — the unified title bar is for window-level actions,
-            // not for document settings — and it read as clutter next to the
-            // window title. It belongs with the other conversion settings.
-            Picker("Mode", selection: $model.settings.mode) {
-                Text("Hires").tag(BitmapMode.hires)
-                Text("Multicolor").tag(BitmapMode.multicolor)
-            }
-            .pickerStyle(.segmented)
-            .fixedSize()
-            .help(
-                "Hires: 320×200, 2 colors per 8×8 cell — line art and text. "
-                    + "Multicolor: 160×200 wide pixels, 3 colors + shared "
-                    + "background per 4×8 cell — photographs.")
-            .accessibilityLabel("Bitmap mode")
-
-            groupDivider
-
-            // DitherMode is not `CaseIterable` in C64Kit, and this View is not
-            // the place to add that conformance — hardcoding the three cases
-            // keeps the picker source-of-truth local and avoids reaching into
-            // the engine module just to enumerate an enum.
-            Picker("Dither", selection: $model.settings.dither) {
-                ForEach([DitherMode.none, .bayer, .fs], id: \.self) { d in
-                    Text(label(for: d)).tag(d)
-                }
-            }
-            .pickerStyle(.menu)
-            .fixedSize()
-            .help(
-                "How quantization error is spread before snapping to the "
-                    + "16-color palette. Floyd–Steinberg for photos; None for "
-                    + "flat graphics.")
-            .accessibilityLabel("Dithering")
-
-            Picker("Palette", selection: $model.settings.palette) {
-                ForEach(C64Palette.allCases, id: \.self) { p in
-                    Text(label(for: p)).tag(p)
-                }
-            }
-            .pickerStyle(.menu)
-            .fixedSize()
-            .help(
-                "Which measured C64 color table to match against. Colodore is "
-                    + "the modern reference; Pepto is the older community "
-                    + "standard.")
-            .accessibilityLabel("Palette")
-
-            groupDivider
-
-            slider(title: "Brightness", value: $model.settings.brightness)
-            slider(title: "Contrast", value: $model.settings.contrast)
-            slider(title: "Saturation", value: $model.settings.saturation)
-
-            Spacer()
-
-            // Reset preserves `cropRect` on purpose: the user framed the
-            // picture with intent, and wiping their crop when they only meant
-            // to undo a slider nudge would be surprising. The explicit
-            // `scheduleConvert()` covers the case where every value is
-            // already at its default — `.onChange` won't fire, but a re-render
-            // still costs nothing and keeps the button feeling responsive.
-            Button("Reset") {
-                model.settings = ConversionSettings()
-                model.scheduleConvert()
-            }
-            .help(
-                "Restore all conversion settings to their defaults. The crop "
-                    + "is kept.")
-            .accessibilityLabel("Reset adjustments")
+        // Candidates in order, widest first. `ViewThatFits` proposes the
+        // available width to each in turn and takes the first whose ideal size
+        // fits; if none does, it lays out the *last* one anyway. So the last
+        // entry is not just a fallback — it is what SwiftUI reports as the
+        // view's minimum width, and therefore what the window adopts as
+        // `contentMinSize` (see `RootView`).
+        //
+        // Why the shape changed: a single non-wrapping row cannot compress past
+        // its natural width, so that width *was* the window's floor — 1405pt
+        // measured, which cleared a 13" MacBook Air's 1440pt by 35pt and did not
+        // fit a 1280pt display at all. Worse, the failure was silent and
+        // one-way: every control added here, and every larger accessibility text
+        // size, pushed the floor up until the window could no longer fit the
+        // screen, and nothing failed to say so.
+        //
+        // Reflowing changes what a new control costs. It now buys a taller bar
+        // rather than a wider floor, and a taller bar cannot make the app
+        // unusable on a small display. The middle candidate keeps the old
+        // behavior in the band where it was fine: between the roomy row and the
+        // two-row layout the tracks shorten to `sliderWidth.min` first, so a
+        // moderately narrow window still gets one row rather than jumping
+        // straight to two.
+        ViewThatFits(in: .horizontal) {
+            singleRow(sliderWidth: Self.sliderWidth.ideal)
+            singleRow(sliderWidth: Self.sliderWidth.min)
+            stackedRows
         }
         .controlSize(.regular)
         .padding(.horizontal, 16)
@@ -152,6 +99,132 @@ struct ControlsView: View {
         }
     }
 
+    // MARK: - Layouts
+
+    /// Everything on one line, the arrangement the bar prefers.
+    ///
+    /// Takes the track width rather than reading `sliderWidth` directly so the
+    /// same row can be offered twice at different widths — which is what lets
+    /// `ViewThatFits` try "roomy" before "tight" before giving up on one row.
+    private func singleRow(sliderWidth: CGFloat) -> some View {
+        HStack(spacing: 12) {
+            modePicker
+            groupDivider
+            ditherPicker
+            palettePicker
+            groupDivider
+            toneSliders(trackWidth: sliderWidth)
+            Spacer()
+            resetButton
+        }
+    }
+
+    /// Pickers above, tone sliders below.
+    ///
+    /// Split along the same seam the dividers already draw in the wide layout —
+    /// what to produce and how to quantize on top, how to tone underneath — so
+    /// the reflow rearranges the bar without regrouping it into clusters the
+    /// user has not seen before. Reset stays with the pickers because it is a
+    /// window-level action rather than a tone control, and the trailing edge of
+    /// the first row is where it sits in the wide layout too.
+    private var stackedRows: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                modePicker
+                groupDivider
+                ditherPicker
+                palettePicker
+                Spacer()
+                resetButton
+            }
+            HStack(spacing: 12) {
+                toneSliders(trackWidth: Self.sliderWidth.ideal)
+                Spacer()
+            }
+        }
+    }
+
+    // MARK: - Controls
+
+    // The mode picker used to live in the title bar. A segmented control in
+    // the toolbar is not a standard macOS title-bar element — the unified
+    // title bar is for window-level actions, not for document settings — and
+    // it read as clutter next to the window title. It belongs with the other
+    // conversion settings.
+    private var modePicker: some View {
+        Picker("Mode", selection: $model.settings.mode) {
+            Text("Hires").tag(BitmapMode.hires)
+            Text("Multicolor").tag(BitmapMode.multicolor)
+        }
+        .pickerStyle(.segmented)
+        .fixedSize()
+        .help(
+            "Hires: 320×200, 2 colors per 8×8 cell — line art and text. "
+                + "Multicolor: 160×200 wide pixels, 3 colors + shared "
+                + "background per 4×8 cell — photographs.")
+        .accessibilityLabel("Bitmap mode")
+    }
+
+    // DitherMode is not `CaseIterable` in C64Kit, and this View is not the
+    // place to add that conformance — hardcoding the three cases keeps the
+    // picker source-of-truth local and avoids reaching into the engine module
+    // just to enumerate an enum.
+    private var ditherPicker: some View {
+        Picker("Dither", selection: $model.settings.dither) {
+            ForEach([DitherMode.none, .bayer, .fs], id: \.self) { d in
+                Text(label(for: d)).tag(d)
+            }
+        }
+        .pickerStyle(.menu)
+        .fixedSize()
+        .help(
+            "How quantization error is spread before snapping to the "
+                + "16-color palette. Floyd–Steinberg for photos; None for "
+                + "flat graphics.")
+        .accessibilityLabel("Dithering")
+    }
+
+    private var palettePicker: some View {
+        Picker("Palette", selection: $model.settings.palette) {
+            ForEach(C64Palette.allCases, id: \.self) { p in
+                Text(label(for: p)).tag(p)
+            }
+        }
+        .pickerStyle(.menu)
+        .fixedSize()
+        .help(
+            "Which measured C64 color table to match against. Colodore is "
+                + "the modern reference; Pepto is the older community "
+                + "standard.")
+        .accessibilityLabel("Palette")
+    }
+
+    /// The three tone sliders as siblings, so either layout can drop them
+    /// straight into its own `HStack` and control the spacing itself.
+    @ViewBuilder
+    private func toneSliders(trackWidth: CGFloat) -> some View {
+        slider(title: "Brightness", value: $model.settings.brightness, trackWidth: trackWidth)
+        slider(title: "Contrast", value: $model.settings.contrast, trackWidth: trackWidth)
+        slider(title: "Saturation", value: $model.settings.saturation, trackWidth: trackWidth)
+    }
+
+    // Reset preserves `cropRect` on purpose: the user framed the picture with
+    // intent, and wiping their crop when they only meant to undo a slider
+    // nudge would be surprising. The explicit `scheduleConvert()` covers the
+    // case where every value is already at its default — `.onChange` won't
+    // fire, but a re-render still costs nothing and keeps the button feeling
+    // responsive.
+    private var resetButton: some View {
+        Button("Reset") {
+            model.settings = ConversionSettings()
+            model.scheduleConvert()
+        }
+        .help(
+            "Restore all conversion settings to their defaults. The crop "
+                + "is kept.")
+        .accessibilityLabel("Reset adjustments")
+    }
+
     private var groupDivider: some View {
         Divider().frame(height: Self.dividerHeight)
     }
@@ -165,18 +238,14 @@ struct ControlsView: View {
     /// the whole bar as "0.00" becomes "-0.75" and the row jitters under the
     /// cursor.
     ///
-    /// The two `String(format: "%+.2f", …)` calls below are the accepted legacy
-    /// AGENTS.md names, and it says to convert them if you touch this code —
-    /// which this change did. Deliberately not converted, as a recorded
-    /// decision rather than an oversight: a `FormatStyle` is locale-sensitive by
-    /// design, so the rendered string's width stops being predictable (decimal
-    /// separator, sign glyph, digit shaping), and the 44pt readout frame right
-    /// above exists precisely to pin that width. Swapping in a formatter here
-    /// risks either truncation or a return of the jitter the frame prevents, in
-    /// locales nobody testing this change would see. It wants its own change
-    /// with a width check per locale, not a drive-by inside a window-sizing fix.
+    /// `trackWidth` is the ideal *and* the maximum, while the floor stays at
+    /// `sliderWidth.min`: a candidate row is measured at its ideal, so passing
+    /// the width in is what makes "the same row, but tighter" a distinct
+    /// candidate `ViewThatFits` can weigh. The minimum still applies underneath,
+    /// so the last candidate can be squeezed narrower than it would like rather
+    /// than forcing the window to grow.
     @ViewBuilder
-    private func slider(title: String, value: Binding<Double>) -> some View {
+    private func slider(title: String, value: Binding<Double>, trackWidth: CGFloat) -> some View {
         HStack(spacing: 6) {
             Text(title)
                 .frame(width: 68, alignment: .trailing)
@@ -184,8 +253,8 @@ struct ControlsView: View {
             Slider(value: value, in: -1...1)
                 .frame(
                     minWidth: Self.sliderWidth.min,
-                    idealWidth: Self.sliderWidth.ideal,
-                    maxWidth: Self.sliderWidth.ideal)
+                    idealWidth: trackWidth,
+                    maxWidth: trackWidth)
                 .accessibilityLabel(title)
                 .accessibilityValue(String(format: "%+.2f", value.wrappedValue))
 
