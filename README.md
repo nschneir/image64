@@ -131,13 +131,6 @@ Or, using [Project64](https://nschneir.github.io/Project64/)'s CLI:
     c64 session start
     c64 run picture.prg
 
-## AI Disclosure
-
-image64 is developed primarily by AI — Anthropic's Claude, working through
-Claude Code — under human direction: a human sets the goals, reviews the
-designs and plans, and approves the work; the AI writes the specs, plans,
-code, tests, and documentation.
-
 ## Related projects
 
 image64 is one of three Commodore toolsets built the same way — AI-written,
@@ -152,6 +145,13 @@ approximation of it.
   and an MCP for agentic Commodore PET coding and debugging through the VICE
   emulator, driven by a `pet` command-line tool. Covers the PET's model range
   and both its 40- and 80-column screens.
+
+## AI Disclosure
+
+image64 is developed primarily by AI — Anthropic's Claude, working through
+Claude Code — under human direction: a human sets the goals, reviews the
+designs and plans, and approves the work; the AI writes the specs, plans,
+code, tests, and documentation.
 
 ## License
 
