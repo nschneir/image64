@@ -6,8 +6,6 @@
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue.svg)
 ![Built with AI](https://img.shields.io/badge/built%20with-AI-green.svg)
 
-**Site:** https://nschneir.github.io/image64/
-
 image64 is a native macOS tool that converts modern images into pictures that
 satisfy the Commodore 64's bitmap-mode display constraints. It is both a
 windowed app — drag an image in, crop it, watch the live C64 preview — and an
@@ -15,8 +13,9 @@ windowed app — drag an image in, crop it, watch the live C64 preview — and a
 same engine code, and exports are the native C64 formats plus a runnable
 program that puts the picture on screen on real hardware or in VICE.
 
-It is a companion to [Project64](../Project64), the agentic C64 development
-toolset; exported images drop straight into that workflow.
+It is a companion to [Project64](https://nschneir.github.io/Project64/), the
+agentic C64 development toolset; exported images drop straight into that
+workflow.
 
 ## What it does
 
@@ -46,8 +45,9 @@ toolset; exported images drop straight into that workflow.
       image64 convert photo.jpg -o out.koa --prg out.prg  # + a program that shows it
 
   Every command takes `--json` for machine-readable output — the intended
-  interface for AI agents, as in [Project64](../Project64). Outputs
-  overwrite without prompting, so a shell loop batch-converts a directory:
+  interface for AI agents, as in
+  [Project64](https://nschneir.github.io/Project64/). Outputs overwrite
+  without prompting, so a shell loop batch-converts a directory:
 
       for f in art/*.png; do
           image64 convert "$f" -o "out/$(basename "${f%.*}").koa"
@@ -126,7 +126,7 @@ distribution, invoke its launcher script directly:
 script is what sets up the environment the emulator needs). The app finds that
 script by itself, which is why its button works with no `PATH` setup at all.
 
-Or, using [Project64](../Project64)'s CLI:
+Or, using [Project64](https://nschneir.github.io/Project64/)'s CLI:
 
     c64 session start
     c64 run picture.prg
