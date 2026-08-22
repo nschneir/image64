@@ -148,9 +148,10 @@ approximation of it.
   an MCP for agentic Commodore 64 coding and debugging through the VICE
   emulator, driven by a `c64` command-line tool. It is image64's downstream
   neighbor: an exported `.prg` runs with `c64 run picture.prg`.
-- **[PET Project](https://nschneir.github.io/PET-Project/)** — the same
-  toolset aimed at the Commodore PET, driven by a `pet` command-line tool and
-  VICE's `xpet`, covering the PET's own models and its 40/80-column screens.
+- **[PET Project](https://nschneir.github.io/PET-Project/)** — tools, skills,
+  and an MCP for agentic Commodore PET coding and debugging through the VICE
+  emulator, driven by a `pet` command-line tool. Covers the PET's model range
+  and both its 40- and 80-column screens.
 
 ## License
 
