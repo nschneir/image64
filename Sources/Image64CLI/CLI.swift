@@ -1,4 +1,5 @@
 import ArgumentParser
+import C64Kit
 import Foundation
 
 /// The `image64` root command.
@@ -10,6 +11,12 @@ struct Image64Command: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "image64",
         abstract: "Convert modern images to Commodore 64 bitmap-mode pictures.",
+        // ArgumentParser adds `--version` only when this is non-empty. Left
+        // unset it does not degrade to printing nothing: the flag is simply
+        // unknown, and `image64 --version` fails as a usage error — which is
+        // what it did until 1.0.0, while the comment on `main` below claimed
+        // the flag was handled.
+        version: C64KitInfo.version,
         subcommands: [ConvertCommand.self]
     )
 }

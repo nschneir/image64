@@ -13,6 +13,8 @@ swift build -c release
 
 Then invoke it as `.build/release/image64`. If a step below shows a bare `image64` command, prefix it with that path (or put `.build/release` on `PATH` for the session).
 
+`image64 --version` prints the version you are driving. Worth capturing in any report of a conversion, so a result can be tied to the code that produced it.
+
 Do not substitute another C64 image converter if the build fails. Stop and report the build error to the maintainer. The point of this skill is byte-identical output from this specific tool, so a different converter is not an acceptable fallback.
 
 ## Converting

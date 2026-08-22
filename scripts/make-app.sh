@@ -26,10 +26,12 @@
 # CFBundleVersion (the build number LaunchServices and Gatekeeper expect to
 # exist; there is no separate build counter in this project, so the two are the
 # same string). `.github/workflows/release.yml` passes the pushed tag with its
-# leading `v` stripped, so a `v0.2.0` release ships a bundle that says 0.2.0
-# instead of a hardcoded literal. A bare local run gets the development
-# default below, which is also the fallback the About panel uses under
-# `swift run Image64App` where there is no bundle to read at all.
+# leading `v` stripped, so a `v0.2.0` release ships a bundle that says 0.2.0.
+# A bare local run falls back to `scripts/version.sh`, which reads
+# `C64KitInfo.version` — the same constant the CLI's `--version` prints and the
+# App's About panel falls back to. This script deliberately holds no version
+# literal of its own: two copies drifting apart is exactly how a bundle ends up
+# claiming a version the binary inside it does not.
 
 set -euo pipefail
 
@@ -37,7 +39,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 APP="dist/image64.app"
-VERSION="${1:-1.0.0}"
+
+# Fails loudly (set -e plus the script's own check) rather than defaulting to an
+# empty string: a bundle whose CFBundleShortVersionString is "" is accepted by
+# Finder and reads as a blank line in the About panel, which is worse than not
+# building.
+VERSION="${1:-$(scripts/version.sh)}"
 
 # Universal so one downloaded .app runs on both Apple Silicon and Intel Macs
 # still supported by the macOS 14 floor. A single-arch build on an arm64 runner

@@ -67,9 +67,13 @@ final class SkillDocTests: XCTestCase {
 
     // MARK: - Option extraction
 
-    /// The regex finds any `--foo` or `--foo-bar` token; `--help` is filtered by
-    /// the caller because it is the one option we never expect the skill to
-    /// mention.
+    /// The regex finds any `--foo` or `--foo-bar` token. `--help` and
+    /// `--version` are filtered out: both are ArgumentParser's own, neither is
+    /// part of the conversion surface this skill documents, and `--version`
+    /// only appears in `convert --help` at all because setting it on the root
+    /// command propagates it to every subcommand. Filtering happens on both
+    /// sides, so the skill may still mention them — it just is not required to,
+    /// and cannot be accused of inventing them.
     private func longOptions(in text: String) -> Set<String> {
         let pattern = try! NSRegularExpression(pattern: "--[a-z][a-z0-9-]*")
         let range = NSRange(text.startIndex..., in: text)
@@ -77,7 +81,7 @@ final class SkillDocTests: XCTestCase {
         pattern.enumerateMatches(in: text, range: range) { match, _, _ in
             guard let match, let range = Range(match.range, in: text) else { return }
             let token = String(text[range])
-            if token != "--help" {
+            if token != "--help" && token != "--version" {
                 found.insert(token)
             }
         }

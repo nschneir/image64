@@ -379,14 +379,14 @@ private let displayCopyright: String =
 /// The version string the About panel reports.
 ///
 /// Read from the bundle so a packaged `image64.app` always names the version it
-/// actually shipped: `scripts/make-app.sh` writes
-/// `CFBundleShortVersionString` from its version argument, and the release
-/// workflow passes the pushed tag. Under `swift run Image64App` there is no
-/// Info.plist at all, so the literal is the development fallback — and the one
-/// place a version literal still lives in this target, matching the script's
-/// own default.
+/// actually shipped: `scripts/make-app.sh` writes `CFBundleShortVersionString`
+/// from its version argument, and the release workflow passes the pushed tag.
+/// Under `swift run Image64App` there is no Info.plist at all, so the fallback
+/// is what the About panel shows — `C64KitInfo.version`, the same constant the
+/// CLI's `--version` prints and the same one the packaging script derives its
+/// default from. No version literal lives in this target any more.
 private let displayVersion: String =
-    Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? C64KitInfo.version
 
 /// Whether **Show in VICE** — the File-menu command and the toolbar button,
 /// which must agree — can do anything right now.
